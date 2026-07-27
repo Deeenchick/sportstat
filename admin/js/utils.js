@@ -248,7 +248,10 @@ function showNotification(message, type = 'info', duration = 3000) {
 // --- ЗАГРУЗКА ТУРНИРОВ ДЛЯ SELECT (УЛУЧШЕННАЯ) ---
 async function loadTournamentsForSelect(selectId, preserveValue = true) {
     const select = document.getElementById(selectId);
-    if (!select) return;
+    if (!select) {
+        console.error(`❌ Select ${selectId} не найден`);
+        return;
+    }
     
     const currentVal = preserveValue ? select.value : '';
     
@@ -258,6 +261,11 @@ async function loadTournamentsForSelect(selectId, preserveValue = true) {
         
         const data = await supabaseRequest('/rest/v1/tournaments?select=id,title,status&order=created_at.desc');
         
+        if (!data || data.length === 0) {
+            select.innerHTML = '<option value="">Нет турниров</option>';
+            return;
+        }
+        
         select.innerHTML = '<option value="">Выберите турнир...</option>' +
             data.map(t => `<option value="${t.id}">${t.title || 'Турнир'} (${t.status})</option>`).join('');
         
@@ -265,10 +273,14 @@ async function loadTournamentsForSelect(selectId, preserveValue = true) {
             select.value = currentVal;
         }
         
+        console.log(`✅ Загружено ${data.length} турниров для ${selectId}`);
+        
     } catch (e) {
-        console.error('Ошибка загрузки турниров:', e);
+        console.error(`❌ Ошибка загрузки турниров для ${selectId}:`, e);
         select.innerHTML = '<option value="">❌ Ошибка загрузки</option>';
-        showNotification('Не удалось загрузить турниры', 'error');
+        if (typeof showNotification === 'function') {
+            showNotification('Не удалось загрузить турниры', 'error');
+        }
     } finally {
         select.disabled = false;
     }
@@ -438,3 +450,4 @@ document.addEventListener('DOMContentLoaded', () => {
     
     console.log('🚀 Вспомогательные функции инициализированы');
 });
+
