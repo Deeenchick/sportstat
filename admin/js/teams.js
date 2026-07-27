@@ -16,6 +16,7 @@ async function loadTeamsPage() {
                 <select id="teamsTournamentSelect" onchange="loadTeams()">
                     <option value="">Выберите турнир...</option>
                 </select>
+                <button onclick="forceCreateTeams()" class="warning">🔧 Создать команды</button>
                 <button onclick="autoFillTeams()" class="warning">⚡ Заполнить случайно</button>
                 <button onclick="clearTeams()" class="danger">🗑️ Очистить все</button>
             </div>
@@ -58,9 +59,11 @@ async function loadTeams() {
 
         // 2. Загружаем команды для турнира
         let teams = await supabaseRequest(`/rest/v1/tournament_teams?select=*&tournament_id=eq.${tournamentId}`);
+        console.log('🏆 Команд найдено:', teams?.length || 0);
         
         // 3. Если команд нет — создаем
         if (!teams || teams.length === 0) {
+            console.log('⚠️ Команд нет, создаем...');
             const teamNames = ['А', 'Б', 'В'];
             for (const name of teamNames) {
                 await supabaseRequest('/rest/v1/tournament_teams', 'POST', [{
@@ -71,6 +74,7 @@ async function loadTeams() {
                 }]);
             }
             teams = await supabaseRequest(`/rest/v1/tournament_teams?select=*&tournament_id=eq.${tournamentId}`);
+            console.log('✅ Создано команд:', teams?.length || 0);
         }
 
         // 4. Загружаем составы команд
@@ -120,7 +124,16 @@ function renderTeams() {
     let html = '<div class="teams-grid">';
     for (const name of teamNames) {
         const team = teamData[name];
-        if (!team) continue;
+        if (!team) {
+            // Если команды нет в данных, показываем пустую
+            html += `
+                <div class="team-card">
+                    <h4>Команда ${name} (0/5)</h4>
+                    <div class="empty-slot">Команда не создана</div>
+                </div>
+            `;
+            continue;
+        }
         
         // Доступные игроки (не в этой команде и не в других)
         const usedPlayers = new Set();
@@ -154,6 +167,29 @@ function renderTeams() {
     }
     html += '</div>';
     container.innerHTML = html;
+}
+
+// --- ПРИНУДИТЕЛЬНОЕ СОЗДАНИЕ КОМАНД ---
+async function forceCreateTeams() {
+    const select = document.getElementById('teamsTournamentSelect');
+    const tournamentId = select?.value;
+    if (!tournamentId) return alert('Сначала выберите турнир!');
+    
+    try {
+        const teamNames = ['А', 'Б', 'В'];
+        for (const name of teamNames) {
+            await supabaseRequest('/rest/v1/tournament_teams', 'POST', [{
+                tournament_id: tournamentId,
+                team_name: name,
+                wins: 0, draws: 0, losses: 0,
+                goals_for: 0, goals_against: 0, points: 0
+            }]);
+        }
+        alert('✅ Команды А, Б, В созданы!');
+        loadTeams();
+    } catch (e) {
+        alert('❌ Ошибка: ' + e.message);
+    }
 }
 
 async function addToTeam(teamName, playerId) {
@@ -194,6 +230,15 @@ async function autoFillTeams() {
     if (!currentTournamentId) return alert('Сначала выберите турнир!');
     if (allPlayers.length < 9) return alert('Нужно минимум 9 игроков для 3 команд!');
     
+    // Проверяем, что все 3 команды существуют
+    const teamNames = ['А', 'Б', 'В'];
+    for (const name of teamNames) {
+        if (!teamData[name]) {
+            alert('❌ Команда ' + name + ' не создана! Нажмите "Создать команды"');
+            return;
+        }
+    }
+    
     try {
         // Очищаем все составы
         for (const team of Object.values(teamData)) {
@@ -204,7 +249,6 @@ async function autoFillTeams() {
         
         // Перемешиваем и распределяем
         const shuffled = [...allPlayers].sort(() => Math.random() - 0.5);
-        const teamNames = ['А', 'Б', 'В'];
         let idx = 0;
         for (const player of shuffled) {
             const name = teamNames[idx % teamNames.length];
