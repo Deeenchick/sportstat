@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚽ Админ-панель | СпортСтат</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- ===== НАВИГАЦИЯ ===== -->
+    <nav class="navbar">
+        <div class="logo">⚽ <span>Спорт</span>Стат</div>
+        <div class="nav-links">
+            <button class="active" data-page="players">👥 Игроки</button>
+            <button data-page="tournaments">🏆 Турниры</button>
+            <button data-page="teams">👥 Команды</button>
+            <button data-page="matches">⚽ Матчи</button>
+        </div>
+        <div class="nav-right">
+            <span class="badge">🔒 Админ</span>
+        </div>
+    </nav>
+
+    <!-- ===== СТРАНИЦЫ ===== -->
+    <div id="page-players" class="page active"></div>
+    <div id="page-tournaments" class="page"></div>
+    <div id="page-teams" class="page"></div>
+    <div id="page-matches" class="page"></div>
+
+    <!-- ===== СКРИПТЫ ===== -->
+    <script src="js/config.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/players.js"></script>
+    <script src="js/tournaments.js"></script>
+    <script src="js/teams.js"></script>
+    <script src="js/matches.js"></script>
+    <script src="js/app.js"></script>
+
+</body>
+</html>
