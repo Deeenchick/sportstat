@@ -8,11 +8,16 @@ console.log('🚀 Админ-панель загружается...');
 // ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
 // ============================================================
 
+// Проверяем, не объявлена ли уже переменная
+if (typeof window._autoRefreshInterval === 'undefined') {
+    window._autoRefreshInterval = null;
+}
+
 // Состояние загрузки страниц
 const pageLoadStatus = {};
 
-// Переменная для автообновления (глобальная)
-let autoRefreshInterval = null;
+// Используем глобальную переменную
+const autoRefreshInterval = window._autoRefreshInterval;
 
 // ============================================================
 // ПЕРЕКЛЮЧЕНИЕ СТРАНИЦ
@@ -284,12 +289,12 @@ async function refreshAll() {
  */
 function startAutoRefresh(interval = 300000) {
     // Останавливаем предыдущий интервал, если он был
-    if (autoRefreshInterval) {
-        clearInterval(autoRefreshInterval);
-        autoRefreshInterval = null;
+    if (window._autoRefreshInterval) {
+        clearInterval(window._autoRefreshInterval);
+        window._autoRefreshInterval = null;
     }
     
-    autoRefreshInterval = setInterval(() => {
+    window._autoRefreshInterval = setInterval(() => {
         console.log('🔄 Автоматическое обновление данных');
         if (document.hidden) {
             // Если страница не в фокусе, пропускаем обновление
@@ -305,9 +310,9 @@ function startAutoRefresh(interval = 300000) {
  * Остановка автоматического обновления
  */
 function stopAutoRefresh() {
-    if (autoRefreshInterval) {
-        clearInterval(autoRefreshInterval);
-        autoRefreshInterval = null;
+    if (window._autoRefreshInterval) {
+        clearInterval(window._autoRefreshInterval);
+        window._autoRefreshInterval = null;
         console.log('⏰ Автообновление остановлено');
     }
 }
