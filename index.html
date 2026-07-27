@@ -5,57 +5,120 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>⚽ СпортСтат</title>
     <style>
-        * { box-sizing: border-box; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: system-ui, -apple-system, sans-serif;
-            max-width: 600px;
-            margin: 50px auto;
-            padding: 20px;
             background: #f1f5f9;
+            min-height: 100vh;
         }
+        
+        /* --- НАВИГАЦИЯ --- */
+        .navbar {
+            background: white;
+            padding: 16px 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            gap: 32px;
+            flex-wrap: wrap;
+        }
+        .navbar .logo {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        .navbar .logo span { color: #2563eb; }
+        .nav-links {
+            display: flex;
+            gap: 8px;
+        }
+        .nav-links button {
+            padding: 8px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            background: transparent;
+            color: #64748b;
+            transition: all 0.2s;
+        }
+        .nav-links button:hover { background: #f1f5f9; }
+        .nav-links button.active {
+            background: #2563eb;
+            color: white;
+        }
+
+        /* --- СТРАНИЦЫ --- */
+        .page {
+            display: none;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+        .page.active { display: block; }
+
+        /* --- КАРТОЧКИ --- */
         .card {
             background: white;
             padding: 24px;
             border-radius: 16px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
         }
-        h1 { margin-top: 0; color: #1e293b; }
+        .card h2 {
+            font-size: 20px;
+            color: #1e293b;
+            margin-bottom: 16px;
+        }
+
+        /* --- СТАТУС --- */
         .status {
             padding: 12px 16px;
             border-radius: 8px;
-            margin: 16px 0;
+            margin-bottom: 16px;
             font-weight: 500;
         }
         .status.loading { background: #f1f5f9; color: #475569; }
         .status.success { background: #dcfce7; color: #166534; }
         .status.error { background: #fee2e2; color: #991b1b; }
+
+        /* --- ФОРМЫ --- */
         .flex {
             display: flex;
             gap: 12px;
-            margin-bottom: 20px;
+            flex-wrap: wrap;
         }
-        .flex input {
+        .flex input, .flex select {
             flex: 1;
-            padding: 12px 16px;
+            min-width: 150px;
+            padding: 10px 14px;
             border: 2px solid #e2e8f0;
             border-radius: 10px;
-            font-size: 16px;
+            font-size: 15px;
             outline: none;
         }
-        .flex input:focus { border-color: #2563eb; }
+        .flex input:focus, .flex select:focus { border-color: #2563eb; }
         .flex button {
-            padding: 12px 24px;
+            padding: 10px 24px;
             background: #2563eb;
             color: white;
             border: none;
             border-radius: 10px;
-            font-size: 16px;
+            font-size: 15px;
             font-weight: 600;
             cursor: pointer;
+            white-space: nowrap;
         }
         .flex button:hover { background: #1d4ed8; }
         .flex button:disabled { background: #94a3b8; cursor: not-allowed; }
-        ul { list-style: none; padding: 0; margin: 0; }
+        .flex button.danger { background: #ef4444; }
+        .flex button.danger:hover { background: #dc2626; }
+        .flex button.success { background: #22c55e; }
+        .flex button.success:hover { background: #16a34a; }
+
+        /* --- СПИСКИ --- */
+        ul { list-style: none; padding: 0; }
         li {
             display: flex;
             justify-content: space-between;
@@ -64,6 +127,7 @@
             border-bottom: 1px solid #f1f5f9;
         }
         li:last-child { border-bottom: none; }
+        .empty { color: #94a3b8; text-align: center; padding: 20px 0; }
         .delete-btn {
             color: #ef4444;
             cursor: pointer;
@@ -74,162 +138,378 @@
             border-radius: 6px;
         }
         .delete-btn:hover { background: #fee2e2; }
-        .empty { color: #94a3b8; text-align: center; padding: 20px 0; }
-        .player-name { font-weight: 500; }
+
+        /* --- ТУРНИРЫ --- */
+        .tournament-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 16px;
+            background: #f8fafc;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            border-left: 4px solid #2563eb;
+        }
+        .tournament-item .info { flex: 1; }
+        .tournament-item .title { font-weight: 600; }
+        .tournament-item .date { font-size: 14px; color: #64748b; }
+        .tournament-item .status-badge {
+            padding: 4px 12px;
+            border-radius: 40px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .status-badge.draft { background: #f1f5f9; color: #64748b; }
+        .status-badge.active { background: #dcfce7; color: #166534; }
+        .status-badge.finished { background: #e2e8f0; color: #475569; }
+
+        /* --- ГРИД ДЛЯ КОМАНД --- */
+        .teams-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 16px;
+            margin: 16px 0;
+        }
+        .team-card {
+            background: #f8fafc;
+            padding: 16px;
+            border-radius: 10px;
+            border-top: 4px solid #2563eb;
+        }
+        .team-card h4 { margin-bottom: 8px; color: #1e293b; }
+        .team-card .player-tag {
+            display: inline-block;
+            background: white;
+            padding: 4px 12px;
+            border-radius: 40px;
+            font-size: 13px;
+            margin: 3px;
+            border: 1px solid #e2e8f0;
+        }
+        .team-card .empty-slot {
+            color: #94a3b8;
+            font-size: 13px;
+            padding: 4px 0;
+        }
+
+        @media (max-width: 640px) {
+            .teams-grid { grid-template-columns: 1fr; }
+            .navbar { flex-direction: column; align-items: stretch; gap: 12px; }
+            .nav-links { justify-content: center; }
+        }
     </style>
 </head>
 <body>
 
-    <div class="card">
-        <h1>⚽ СпортСтат</h1>
-
-        <div id="statusMessage" class="status loading">⏳ Подключение...</div>
-
-        <div class="flex">
-            <input id="playerName" placeholder="Введите имя игрока..." />
-            <button id="addBtn">➕ Добавить</button>
+    <!-- ===== НАВИГАЦИЯ ===== -->
+    <nav class="navbar">
+        <div class="logo">⚽ <span>Спорт</span>Стат</div>
+        <div class="nav-links">
+            <button class="active" onclick="showPage('players')">👥 Игроки</button>
+            <button onclick="showPage('tournaments')">🏆 Турниры</button>
+            <button onclick="showPage('matches')">⚽ Матчи</button>
         </div>
+    </nav>
 
-        <h3>📋 Игроки</h3>
-        <ul id="playerList">
-            <li class="empty">Загрузка...</li>
-        </ul>
+    <!-- ===== СТРАНИЦА: ИГРОКИ ===== -->
+    <div id="page-players" class="page active">
+        <div class="card">
+            <h2>👥 Игроки</h2>
+            <div id="playersStatus" class="status loading">⏳ Загрузка...</div>
+            <div class="flex">
+                <input id="playerName" placeholder="Введите имя игрока..." />
+                <button onclick="addPlayer()">➕ Добавить</button>
+            </div>
+            <ul id="playersList"><li class="empty">Загрузка...</li></ul>
+        </div>
+    </div>
+
+    <!-- ===== СТРАНИЦА: ТУРНИРЫ ===== -->
+    <div id="page-tournaments" class="page">
+        <div class="card">
+            <h2>🏆 Турниры</h2>
+            <div id="tournamentsStatus" class="status loading">⏳ Загрузка...</div>
+            
+            <!-- Форма создания турнира -->
+            <div style="background: #f8fafc; padding: 16px; border-radius: 10px; margin-bottom: 16px;">
+                <h4 style="margin-bottom: 12px;">📝 Создать турнир</h4>
+                <div class="flex">
+                    <input id="tournamentTitle" placeholder="Название турнира..." />
+                    <input type="date" id="tournamentDate" />
+                    <button onclick="createTournament()" class="success">🚀 Создать</button>
+                </div>
+            </div>
+
+            <ul id="tournamentsList"><li class="empty">Загрузка...</li></ul>
+        </div>
+    </div>
+
+    <!-- ===== СТРАНИЦА: МАТЧИ ===== -->
+    <div id="page-matches" class="page">
+        <div class="card">
+            <h2>⚽ Ввод матчей</h2>
+            <div id="matchesStatus" class="status loading">⏳ Загрузка...</div>
+            
+            <div class="flex" style="margin-bottom: 16px;">
+                <select id="matchTournamentSelect" onchange="loadMatches()">
+                    <option value="">Выберите турнир...</option>
+                </select>
+            </div>
+
+            <div id="matchesContainer">
+                <p class="empty">Выберите турнир для ввода матчей</p>
+            </div>
+        </div>
     </div>
 
     <script>
         // ============================================================
-        // 🔑 ВАШИ ДАННЫЕ ИЗ SUPABASE (Settings → API)
+        // 🔑 ВАШИ ДАННЫЕ
         // ============================================================
         const SUPABASE_URL = 'https://obmhexrwltdtldjdeuxo.supabase.co';
         const SUPABASE_KEY = 'sb_publishable_HX4idr3fjs1BvNTwZidseg_oiQddbPX';
         // ============================================================
 
-        const statusEl = document.getElementById('statusMessage');
-        const listEl = document.getElementById('playerList');
-        const inputEl = document.getElementById('playerName');
-        const addBtn = document.getElementById('addBtn');
-
-        // --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ЗАПРОСОВ ---
+        // --- УТИЛИТЫ ---
         async function supabaseRequest(endpoint, method = 'GET', data = null) {
-            const url = SUPABASE_URL + endpoint;
-            
             const headers = {
                 'apikey': SUPABASE_KEY,
                 'Authorization': 'Bearer ' + SUPABASE_KEY,
-                'Content-Type': 'application/json',
-                'Prefer': 'return=representation'
+                'Content-Type': 'application/json'
             };
-
-            const options = {
-                method: method,
-                headers: headers,
-            };
-
-            if (data) {
-                options.body = JSON.stringify(data);
-            }
-
-            const response = await fetch(url, options);
-            
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Ошибка ${response.status}: ${errorText}`);
-            }
-
-            return response.json();
+            const options = { method, headers };
+            if (data) options.body = JSON.stringify(data);
+            const resp = await fetch(SUPABASE_URL + endpoint, options);
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            return resp.json();
         }
 
-        // --- СТАТУС ---
-        function setStatus(msg, type = 'loading') {
-            statusEl.textContent = msg;
-            statusEl.className = 'status ' + type;
+        function setStatus(id, msg, type = 'loading') {
+            const el = document.getElementById(id);
+            if (el) { el.textContent = msg; el.className = 'status ' + type; }
         }
 
-        // --- ЗАГРУЗКА ИГРОКОВ ---
+        function showPage(page) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById('page-' + page).classList.add('active');
+            document.querySelectorAll('.nav-links button').forEach(b => b.classList.remove('active'));
+            document.querySelector(`.nav-links button[onclick="showPage('${page}')"]`).classList.add('active');
+            if (page === 'players') loadPlayers();
+            if (page === 'tournaments') loadTournaments();
+            if (page === 'matches') loadTournamentsForSelect();
+        }
+
+        // ============================================================
+        // ИГРОКИ
+        // ============================================================
         async function loadPlayers() {
-            listEl.innerHTML = '<li class="empty">⏳ Загрузка...</li>';
-
+            const list = document.getElementById('playersList');
+            list.innerHTML = '<li class="empty">⏳ Загрузка...</li>';
             try {
                 const data = await supabaseRequest('/rest/v1/players?select=*&order=name.asc');
-
-                setStatus('✅ Подключено! Игроков: ' + (data?.length || 0), 'success');
-
+                setStatus('playersStatus', '✅ Игроков: ' + (data?.length || 0), 'success');
                 if (!data || data.length === 0) {
-                    listEl.innerHTML = '<li class="empty">📋 Пока нет игроков. Добавьте первого!</li>';
+                    list.innerHTML = '<li class="empty">📋 Нет игроков</li>';
                     return;
                 }
-
-                let html = '';
-                data.forEach(p => {
-                    html += `
-                        <li>
-                            <span class="player-name">${p.name}</span>
-                            <button class="delete-btn" data-id="${p.id}">✕</button>
-                        </li>
-                    `;
-                });
-                listEl.innerHTML = html;
-
-                document.querySelectorAll('.delete-btn').forEach(btn => {
-                    btn.addEventListener('click', function() {
-                        deletePlayer(this.dataset.id);
-                    });
-                });
-
+                list.innerHTML = data.map(p => `
+                    <li>
+                        <span>${p.name}</span>
+                        <button class="delete-btn" onclick="deletePlayer('${p.id}')">✕</button>
+                    </li>
+                `).join('');
             } catch (e) {
-                setStatus('❌ ' + e.message, 'error');
-                listEl.innerHTML = '<li class="empty">❌ ' + e.message + '</li>';
-                console.error('Error:', e);
+                setStatus('playersStatus', '❌ ' + e.message, 'error');
+                list.innerHTML = '<li class="empty">❌ Ошибка</li>';
             }
         }
 
-        // --- ДОБАВЛЕНИЕ ---
         async function addPlayer() {
-            const name = inputEl.value.trim();
-            if (!name) {
-                alert('Введите имя игрока!');
-                return;
-            }
-
-            addBtn.disabled = true;
-            addBtn.textContent = '⏳...';
-
+            const input = document.getElementById('playerName');
+            const name = input.value.trim();
+            if (!name) return alert('Введите имя!');
+            const btn = document.querySelector('#page-players .flex button');
+            btn.disabled = true; btn.textContent = '⏳...';
             try {
-                await supabaseRequest('/rest/v1/players', 'POST', [{ name: name }]);
-                inputEl.value = '';
-                await loadPlayers();
-            } catch (e) {
-                alert('❌ Ошибка: ' + e.message);
-                console.error('Add error:', e);
-            }
-
-            addBtn.disabled = false;
-            addBtn.textContent = '➕ Добавить';
+                await supabaseRequest('/rest/v1/players', 'POST', [{ name }]);
+                input.value = '';
+                loadPlayers();
+            } catch (e) { alert('❌ ' + e.message); }
+            btn.disabled = false; btn.textContent = '➕ Добавить';
         }
 
-        // --- УДАЛЕНИЕ ---
         async function deletePlayer(id) {
-            if (!confirm('Удалить этого игрока?')) return;
-
+            if (!confirm('Удалить?')) return;
             try {
                 await supabaseRequest('/rest/v1/players?id=eq.' + id, 'DELETE');
-                await loadPlayers();
+                loadPlayers();
+            } catch (e) { alert('❌ ' + e.message); }
+        }
+
+        // ============================================================
+        // ТУРНИРЫ
+        // ============================================================
+        async function loadTournaments() {
+            const list = document.getElementById('tournamentsList');
+            list.innerHTML = '<li class="empty">⏳ Загрузка...</li>';
+            try {
+                const data = await supabaseRequest('/rest/v1/tournaments?select=*&order=created_at.desc');
+                setStatus('tournamentsStatus', '✅ Турниров: ' + (data?.length || 0), 'success');
+                if (!data || data.length === 0) {
+                    list.innerHTML = '<li class="empty">📋 Нет турниров. Создайте первый!</li>';
+                    return;
+                }
+                list.innerHTML = data.map(t => `
+                    <div class="tournament-item">
+                        <div class="info">
+                            <div class="title">${t.title || 'Турнир'}</div>
+                            <div class="date">${t.tournament_date || ''}</div>
+                        </div>
+                        <div>
+                            <span class="status-badge ${t.status}">${t.status || 'draft'}</span>
+                            <button onclick="deleteTournament('${t.id}')" class="delete-btn" style="margin-left:8px;">✕</button>
+                        </div>
+                    </div>
+                `).join('');
             } catch (e) {
-                alert('❌ Ошибка: ' + e.message);
-                console.error('Delete error:', e);
+                setStatus('tournamentsStatus', '❌ ' + e.message, 'error');
+                list.innerHTML = '<li class="empty">❌ Ошибка</li>';
             }
         }
 
-        // --- СОБЫТИЯ ---
-        addBtn.addEventListener('click', addPlayer);
-        inputEl.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') {
-                addPlayer();
-            }
-        });
+        async function createTournament() {
+            const title = document.getElementById('tournamentTitle').value.trim() || 'Турнир';
+            const date = document.getElementById('tournamentDate').value || new Date().toISOString().split('T')[0];
+            const btn = document.querySelector('#page-tournaments .card .flex button');
+            btn.disabled = true; btn.textContent = '⏳...';
+            try {
+                const data = await supabaseRequest('/rest/v1/tournaments', 'POST', [{
+                    title,
+                    tournament_date: date,
+                    status: 'draft',
+                    registered_players: []
+                }]);
+                document.getElementById('tournamentTitle').value = '';
+                loadTournaments();
+                alert('✅ Турнир создан! Теперь добавьте команды и игроков.');
+            } catch (e) { alert('❌ ' + e.message); }
+            btn.disabled = false; btn.textContent = '🚀 Создать';
+        }
 
-        // --- ЗАПУСК ---
+        async function deleteTournament(id) {
+            if (!confirm('Удалить турнир?')) return;
+            try {
+                await supabaseRequest('/rest/v1/tournaments?id=eq.' + id, 'DELETE');
+                loadTournaments();
+            } catch (e) { alert('❌ ' + e.message); }
+        }
+
+        // ============================================================
+        // МАТЧИ
+        // ============================================================
+        async function loadTournamentsForSelect() {
+            const select = document.getElementById('matchTournamentSelect');
+            try {
+                const data = await supabaseRequest('/rest/v1/tournaments?select=id,title&order=created_at.desc');
+                select.innerHTML = '<option value="">Выберите турнир...</option>' +
+                    data.map(t => `<option value="${t.id}">${t.title || 'Турнир'}</option>`).join('');
+            } catch (e) {
+                document.getElementById('matchesStatus').textContent = '❌ ' + e.message;
+            }
+        }
+
+        async function loadMatches() {
+            const tournamentId = document.getElementById('matchTournamentSelect').value;
+            const container = document.getElementById('matchesContainer');
+            if (!tournamentId) {
+                container.innerHTML = '<p class="empty">Выберите турнир для ввода матчей</p>';
+                return;
+            }
+            container.innerHTML = '<p>⏳ Загрузка матчей...</p>';
+            try {
+                // Получаем команды
+                const teams = await supabaseRequest(`/rest/v1/tournament_teams?select=*&tournament_id=eq.${tournamentId}`);
+                // Получаем матчи
+                let matches = await supabaseRequest(`/rest/v1/matches?select=*&tournament_id=eq.${tournamentId}`);
+                
+                if (!matches || matches.length === 0) {
+                    // Создаем матчи (12 матчей: каждый с каждым по 4 круга)
+                    const teamPairs = [
+                        ['А','Б'],['А','В'],['Б','В'],
+                        ['А','Б'],['А','В'],['Б','В'],
+                        ['А','Б'],['А','В'],['Б','В'],
+                        ['А','Б'],['А','В'],['Б','В']
+                    ];
+                    const teamMap = {};
+                    teams.forEach(t => teamMap[t.team_name] = t.id);
+                    
+                    let matchNum = 1;
+                    for (const [a, b] of teamPairs) {
+                        if (teamMap[a] && teamMap[b]) {
+                            await supabaseRequest('/rest/v1/matches', 'POST', [{
+                                tournament_id: tournamentId,
+                                team_a_id: teamMap[a],
+                                team_b_id: teamMap[b],
+                                match_number: matchNum++,
+                                is_finished: false
+                            }]);
+                        }
+                    }
+                    matches = await supabaseRequest(`/rest/v1/matches?select=*&tournament_id=eq.${tournamentId}`);
+                }
+
+                // Показываем матчи
+                container.innerHTML = `
+                    <div style="display:grid;gap:12px;">
+                        ${matches.map(m => `
+                            <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:#f8fafc;border-radius:10px;flex-wrap:wrap;">
+                                <span style="font-weight:600;">Матч ${m.match_number}</span>
+                                <span>${teams.find(t=>t.id===m.team_a_id)?.team_name || '?'}</span>
+                                <input type="number" style="width:50px;padding:4px 8px;border:2px solid #e2e8f0;border-radius:6px;text-align:center;" 
+                                    value="${m.score_a || 0}" onchange="updateMatchScore('${m.id}','a',this.value)" />
+                                <span>:</span>
+                                <input type="number" style="width:50px;padding:4px 8px;border:2px solid #e2e8f0;border-radius:6px;text-align:center;" 
+                                    value="${m.score_b || 0}" onchange="updateMatchScore('${m.id}','b',this.value)" />
+                                <span>${teams.find(t=>t.id===m.team_b_id)?.team_name || '?'}</span>
+                                <span style="font-size:12px;color:${m.is_finished ? '#22c55e' : '#94a3b8'};">
+                                    ${m.is_finished ? '✅ Завершен' : '⏳ Ожидает'}
+                                </span>
+                                ${!m.is_finished ? `<button onclick="finishMatch('${m.id}')" style="padding:4px 16px;background:#22c55e;color:white;border:none;border-radius:6px;cursor:pointer;">Завершить</button>` : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div style="margin-top:16px;">
+                        <button onclick="calculateTournament('${tournamentId}')" style="padding:10px 24px;background:#8b5cf6;color:white;border:none;border-radius:10px;cursor:pointer;font-weight:600;">
+                            📊 Рассчитать PEI и результаты
+                        </button>
+                    </div>
+                `;
+            } catch (e) {
+                container.innerHTML = '<p class="empty">❌ Ошибка: ' + e.message + '</p>';
+            }
+        }
+
+        async function updateMatchScore(matchId, side, value) {
+            const field = side === 'a' ? 'score_a' : 'score_b';
+            await supabaseRequest(`/rest/v1/matches?id=eq.${matchId}`, 'PATCH', { [field]: parseInt(value) || 0 });
+        }
+
+        async function finishMatch(matchId) {
+            await supabaseRequest(`/rest/v1/matches?id=eq.${matchId}`, 'PATCH', { is_finished: true });
+            loadMatches();
+            alert('✅ Матч завершен!');
+        }
+
+        async function calculateTournament(tournamentId) {
+            alert('📊 Расчет PEI пока в разработке!');
+            // Здесь будет логика расчета PEI
+        }
+
+        // ============================================================
+        // ЗАПУСК
+        // ============================================================
         loadPlayers();
+        loadTournaments();
     </script>
 
 </body>
