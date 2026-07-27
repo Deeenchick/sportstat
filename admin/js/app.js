@@ -11,6 +11,9 @@ console.log('🚀 Админ-панель загружается...');
 // Состояние загрузки страниц
 const pageLoadStatus = {};
 
+// Переменная для автообновления (глобальная)
+let autoRefreshInterval = null;
+
 // ============================================================
 // ПЕРЕКЛЮЧЕНИЕ СТРАНИЦ
 // ============================================================
@@ -59,7 +62,6 @@ async function showPage(page) {
                         pageLoadStatus.players = true;
                     } else {
                         console.warn('⚠️ Функция loadPlayers не определена');
-                        // Если функция не определена, показываем сообщение
                         if (!pageEl.innerHTML) {
                             pageEl.innerHTML = `
                                 <div class="card">
@@ -276,16 +278,17 @@ async function refreshAll() {
 // АВТОМАТИЧЕСКОЕ ОБНОВЛЕНИЕ
 // ============================================================
 
-let autoRefreshInterval = null;
-
 /**
  * Запуск автоматического обновления данных
  * @param {number} interval - Интервал в миллисекундах (по умолчанию 5 минут)
  */
 function startAutoRefresh(interval = 300000) {
+    // Останавливаем предыдущий интервал, если он был
     if (autoRefreshInterval) {
         clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
     }
+    
     autoRefreshInterval = setInterval(() => {
         console.log('🔄 Автоматическое обновление данных');
         if (document.hidden) {
