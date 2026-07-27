@@ -1,783 +1,456 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚽ СпортСтат</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: system-ui, -apple-system, sans-serif;
-            background: #f1f5f9;
-            min-height: 100vh;
-        }
-        
-        /* --- НАВИГАЦИЯ --- */
-        .navbar {
-            background: white;
-            padding: 16px 24px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            display: flex;
-            align-items: center;
-            gap: 32px;
-            flex-wrap: wrap;
-        }
-        .navbar .logo {
-            font-size: 20px;
-            font-weight: 700;
-            color: #1e293b;
-        }
-        .navbar .logo span { color: #2563eb; }
-        .nav-links {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-        .nav-links button {
-            padding: 8px 20px;
-            border: none;
-            border-radius: 8px;
-            font-size: 15px;
-            font-weight: 500;
-            cursor: pointer;
-            background: transparent;
-            color: #64748b;
-            transition: all 0.2s;
-        }
-        .nav-links button:hover { background: #f1f5f9; }
-        .nav-links button.active {
-            background: #2563eb;
-            color: white;
-        }
+<script>
+    // ============================================================
+    // 🔑 ВАШИ ДАННЫЕ
+    // ============================================================
+    const SUPABASE_URL = 'https://obmhexrwltdtldjdeuxo.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_HX4idr3fjs1BvNTwZidseg_oiQddbPX';
+    // ============================================================
 
-        /* --- СТРАНИЦЫ --- */
-        .page {
-            display: none;
-            max-width: 1000px;
-            margin: 0 auto;
-            padding: 24px;
-        }
-        .page.active { display: block; }
+    // --- УТИЛИТЫ ---
+    async function supabaseRequest(endpoint, method = 'GET', data = null) {
+        const headers = {
+            'apikey': SUPABASE_KEY,
+            'Authorization': 'Bearer ' + SUPABASE_KEY,
+            'Content-Type': 'application/json'
+        };
+        const options = { method, headers };
+        if (data) options.body = JSON.stringify(data);
+        const resp = await fetch(SUPABASE_URL + endpoint, options);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        return resp.json();
+    }
 
-        /* --- КАРТОЧКИ --- */
-        .card {
-            background: white;
-            padding: 24px;
-            border-radius: 16px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-        }
-        .card h2 {
-            font-size: 20px;
-            color: #1e293b;
-            margin-bottom: 16px;
-        }
-        .card h3 {
-            font-size: 16px;
-            color: #334155;
-            margin: 16px 0 8px 0;
-        }
+    function setStatus(id, msg, type = 'loading') {
+        const el = document.getElementById(id);
+        if (el) { el.textContent = msg; el.className = 'status ' + type; }
+    }
 
-        /* --- СТАТУС --- */
-        .status {
-            padding: 12px 16px;
-            border-radius: 8px;
-            margin-bottom: 16px;
-            font-weight: 500;
-        }
-        .status.loading { background: #f1f5f9; color: #475569; }
-        .status.success { background: #dcfce7; color: #166534; }
-        .status.error { background: #fee2e2; color: #991b1b; }
+    function showPage(page) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById('page-' + page).classList.add('active');
+        document.querySelectorAll('.nav-links button').forEach(b => b.classList.remove('active'));
+        document.querySelector(`.nav-links button[onclick="showPage('${page}')"]`).classList.add('active');
+        if (page === 'players') loadPlayers();
+        if (page === 'tournaments') loadTournaments();
+        if (page === 'teams') { loadTournamentsForSelect('teamsTournamentSelect'); loadTeams(); }
+        if (page === 'matches') { loadTournamentsForSelect('matchTournamentSelect'); }
+    }
 
-        /* --- ФОРМЫ --- */
-        .flex {
-            display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
-            align-items: center;
+    // ============================================================
+    // ИГРОКИ
+    // ============================================================
+    async function loadPlayers() {
+        const list = document.getElementById('playersList');
+        list.innerHTML = '<li class="empty">⏳ Загрузка...</li>';
+        try {
+            const data = await supabaseRequest('/rest/v1/players?select=*&order=name.asc');
+            setStatus('playersStatus', '✅ Игроков: ' + (data?.length || 0), 'success');
+            if (!data || data.length === 0) {
+                list.innerHTML = '<li class="empty">📋 Нет игроков</li>';
+                return;
+            }
+            list.innerHTML = data.map(p => `
+                <li>
+                    <span>${p.name}</span>
+                    <button class="delete-btn" onclick="deletePlayer('${p.id}')">✕</button>
+                </li>
+            `).join('');
+        } catch (e) {
+            setStatus('playersStatus', '❌ ' + e.message, 'error');
+            list.innerHTML = '<li class="empty">❌ Ошибка</li>';
         }
-        .flex input, .flex select {
-            flex: 1;
-            min-width: 150px;
-            padding: 10px 14px;
-            border: 2px solid #e2e8f0;
-            border-radius: 10px;
-            font-size: 15px;
-            outline: none;
-        }
-        .flex input:focus, .flex select:focus { border-color: #2563eb; }
-        .flex button {
-            padding: 10px 24px;
-            background: #2563eb;
-            color: white;
-            border: none;
-            border-radius: 10px;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            white-space: nowrap;
-        }
-        .flex button:hover { background: #1d4ed8; }
-        .flex button:disabled { background: #94a3b8; cursor: not-allowed; }
-        .flex button.danger { background: #ef4444; }
-        .flex button.danger:hover { background: #dc2626; }
-        .flex button.success { background: #22c55e; }
-        .flex button.success:hover { background: #16a34a; }
-        .flex button.warning { background: #f59e0b; }
-        .flex button.warning:hover { background: #d97706; }
+    }
 
-        /* --- СПИСКИ --- */
-        ul { list-style: none; padding: 0; }
-        li {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 0;
-            border-bottom: 1px solid #f1f5f9;
-        }
-        li:last-child { border-bottom: none; }
-        .empty { color: #94a3b8; text-align: center; padding: 20px 0; }
-        .delete-btn {
-            color: #ef4444;
-            cursor: pointer;
-            background: none;
-            border: none;
-            font-size: 18px;
-            padding: 4px 8px;
-            border-radius: 6px;
-        }
-        .delete-btn:hover { background: #fee2e2; }
+    async function addPlayer() {
+        const input = document.getElementById('playerName');
+        const name = input.value.trim();
+        if (!name) return alert('Введите имя!');
+        const btn = document.querySelector('#page-players .card .flex button');
+        btn.disabled = true; btn.textContent = '⏳...';
+        try {
+            await supabaseRequest('/rest/v1/players', 'POST', [{ name }]);
+            input.value = '';
+            loadPlayers();
+        } catch (e) { alert('❌ ' + e.message); }
+        btn.disabled = false; btn.textContent = '➕ Добавить';
+    }
 
-        /* --- ТУРНИРЫ --- */
-        .tournament-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 14px 16px;
-            background: #f8fafc;
-            border-radius: 10px;
-            margin-bottom: 10px;
-            border-left: 4px solid #2563eb;
-            flex-wrap: wrap;
-            gap: 8px;
-        }
-        .tournament-item .info { flex: 1; }
-        .tournament-item .title { font-weight: 600; }
-        .tournament-item .date { font-size: 14px; color: #64748b; }
-        .tournament-item .status-badge {
-            padding: 4px 12px;
-            border-radius: 40px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-        .status-badge.draft { background: #f1f5f9; color: #64748b; }
-        .status-badge.active { background: #dcfce7; color: #166534; }
-        .status-badge.finished { background: #e2e8f0; color: #475569; }
-        .tournament-item .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+    async function deletePlayer(id) {
+        if (!confirm('Удалить?')) return;
+        try {
+            await supabaseRequest('/rest/v1/players?id=eq.' + id, 'DELETE');
+            loadPlayers();
+        } catch (e) { alert('❌ ' + e.message); }
+    }
 
-        /* --- КОМАНДЫ --- */
-        .teams-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 16px;
-            margin: 16px 0;
-        }
-        .team-card {
-            background: #f8fafc;
-            padding: 16px;
-            border-radius: 10px;
-            border-top: 4px solid #2563eb;
-        }
-        .team-card.team-a { border-top-color: #ef4444; }
-        .team-card.team-b { border-top-color: #22c55e; }
-        .team-card.team-c { border-top-color: #2563eb; }
-        .team-card h4 { margin-bottom: 8px; color: #1e293b; }
-        .team-card .player-tag {
-            display: inline-block;
-            background: white;
-            padding: 4px 12px;
-            border-radius: 40px;
-            font-size: 13px;
-            margin: 3px;
-            border: 1px solid #e2e8f0;
-        }
-        .team-card .empty-slot {
-            color: #94a3b8;
-            font-size: 13px;
-            padding: 4px 0;
-        }
-        .team-card select {
-            width: 100%;
-            padding: 6px 10px;
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
-            margin-top: 8px;
-            font-size: 14px;
-        }
-
-        /* --- МАТЧИ --- */
-        .match-row {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 16px;
-            background: #f8fafc;
-            border-radius: 10px;
-            flex-wrap: wrap;
-        }
-        .match-row .team-name { font-weight: 600; min-width: 30px; }
-        .match-row input[type="number"] {
-            width: 50px;
-            padding: 4px 8px;
-            border: 2px solid #e2e8f0;
-            border-radius: 6px;
-            text-align: center;
-        }
-        .match-row .status-text { font-size: 12px; }
-        .match-row .status-text.done { color: #22c55e; }
-        .match-row .status-text.pending { color: #94a3b8; }
-
-        @media (max-width: 640px) {
-            .teams-grid { grid-template-columns: 1fr; }
-            .navbar { flex-direction: column; align-items: stretch; gap: 12px; }
-            .nav-links { justify-content: center; }
-        }
-    </style>
-</head>
-<body>
-
-    <!-- ===== НАВИГАЦИЯ ===== -->
-    <nav class="navbar">
-        <div class="logo">⚽ <span>Спорт</span>Стат</div>
-        <div class="nav-links">
-            <button class="active" onclick="showPage('players')">👥 Игроки</button>
-            <button onclick="showPage('tournaments')">🏆 Турниры</button>
-            <button onclick="showPage('teams')">👥 Команды</button>
-            <button onclick="showPage('matches')">⚽ Матчи</button>
-        </div>
-    </nav>
-
-    <!-- ===== СТРАНИЦА: ИГРОКИ ===== -->
-    <div id="page-players" class="page active">
-        <div class="card">
-            <h2>👥 Игроки</h2>
-            <div id="playersStatus" class="status loading">⏳ Загрузка...</div>
-            <div class="flex">
-                <input id="playerName" placeholder="Введите имя игрока..." />
-                <button onclick="addPlayer()">➕ Добавить</button>
-            </div>
-            <ul id="playersList"><li class="empty">Загрузка...</li></ul>
-        </div>
-    </div>
-
-    <!-- ===== СТРАНИЦА: ТУРНИРЫ ===== -->
-    <div id="page-tournaments" class="page">
-        <div class="card">
-            <h2>🏆 Турниры</h2>
-            <div id="tournamentsStatus" class="status loading">⏳ Загрузка...</div>
-            
-            <div style="background: #f8fafc; padding: 16px; border-radius: 10px; margin-bottom: 16px;">
-                <h4 style="margin-bottom: 12px;">📝 Создать турнир</h4>
-                <div class="flex">
-                    <input id="tournamentTitle" placeholder="Название турнира..." />
-                    <input type="date" id="tournamentDate" />
-                    <button onclick="createTournament()" class="success">🚀 Создать</button>
+    // ============================================================
+    // ТУРНИРЫ (ИСПРАВЛЕНО)
+    // ============================================================
+    async function loadTournaments() {
+        const list = document.getElementById('tournamentsList');
+        list.innerHTML = '<li class="empty">⏳ Загрузка...</li>';
+        try {
+            const data = await supabaseRequest('/rest/v1/tournaments?select=*&order=created_at.desc');
+            setStatus('tournamentsStatus', '✅ Турниров: ' + (data?.length || 0), 'success');
+            if (!data || data.length === 0) {
+                list.innerHTML = '<li class="empty">📋 Нет турниров. Создайте первый!</li>';
+                return;
+            }
+            list.innerHTML = data.map(t => `
+                <div class="tournament-item">
+                    <div class="info">
+                        <div class="title">${t.title || 'Турнир'}</div>
+                        <div class="date">${t.tournament_date || ''}</div>
+                    </div>
+                    <div class="actions">
+                        <span class="status-badge ${t.status}">${t.status || 'draft'}</span>
+                        <button onclick="deleteTournament('${t.id}')" class="delete-btn">✕</button>
+                    </div>
                 </div>
-            </div>
+            `).join('');
+        } catch (e) {
+            setStatus('tournamentsStatus', '❌ ' + e.message, 'error');
+            list.innerHTML = '<li class="empty">❌ Ошибка</li>';
+        }
+    }
 
-            <ul id="tournamentsList"><li class="empty">Загрузка...</li></ul>
-        </div>
-    </div>
-
-    <!-- ===== СТРАНИЦА: КОМАНДЫ ===== -->
-    <div id="page-teams" class="page">
-        <div class="card">
-            <h2>👥 Формирование команд</h2>
-            <div id="teamsStatus" class="status loading">⏳ Загрузка...</div>
+    async function createTournament() {
+        const title = document.getElementById('tournamentTitle').value.trim() || 'Турнир';
+        const date = document.getElementById('tournamentDate').value || new Date().toISOString().split('T')[0];
+        const btn = document.querySelector('#page-tournaments .card .flex button');
+        btn.disabled = true; btn.textContent = '⏳...';
+        try {
+            // 1. Создаем турнир
+            const data = await supabaseRequest('/rest/v1/tournaments', 'POST', [{
+                title,
+                tournament_date: date,
+                status: 'draft',
+                registered_players: []
+            }]);
             
-            <div class="flex" style="margin-bottom: 16px;">
-                <select id="teamsTournamentSelect" onchange="loadTeams()">
-                    <option value="">Выберите турнир...</option>
-                </select>
-                <button onclick="autoFillTeams()" class="warning">⚡ Заполнить случайно</button>
-                <button onclick="saveTeams()" class="success">💾 Сохранить составы</button>
-            </div>
-
-            <div id="teamsContainer">
-                <p class="empty">Выберите турнир для формирования команд</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- ===== СТРАНИЦА: МАТЧИ ===== -->
-    <div id="page-matches" class="page">
-        <div class="card">
-            <h2>⚽ Ввод матчей</h2>
-            <div id="matchesStatus" class="status loading">⏳ Загрузка...</div>
+            const tournamentId = data[0].id;
             
-            <div class="flex" style="margin-bottom: 16px;">
-                <select id="matchTournamentSelect" onchange="loadMatches()">
-                    <option value="">Выберите турнир...</option>
-                </select>
-                <button onclick="generateMatches()" class="warning">🔄 Создать матчи</button>
-            </div>
-
-            <div id="matchesContainer">
-                <p class="empty">Выберите турнир для ввода матчей</p>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // ============================================================
-        // 🔑 ВАШИ ДАННЫЕ
-        // ============================================================
-        const SUPABASE_URL = 'https://obmhexrwltdtldjdeuxo.supabase.co';
-        const SUPABASE_KEY = 'sb_publishable_HX4idr3fjs1BvNTwZidseg_oiQddbPX';
-        // ============================================================
-
-        // --- УТИЛИТЫ ---
-        async function supabaseRequest(endpoint, method = 'GET', data = null) {
-            const headers = {
-                'apikey': SUPABASE_KEY,
-                'Authorization': 'Bearer ' + SUPABASE_KEY,
-                'Content-Type': 'application/json'
-            };
-            const options = { method, headers };
-            if (data) options.body = JSON.stringify(data);
-            const resp = await fetch(SUPABASE_URL + endpoint, options);
-            if (!resp.ok) throw new Error('HTTP ' + resp.status);
-            return resp.json();
-        }
-
-        function setStatus(id, msg, type = 'loading') {
-            const el = document.getElementById(id);
-            if (el) { el.textContent = msg; el.className = 'status ' + type; }
-        }
-
-        function showPage(page) {
-            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-            document.getElementById('page-' + page).classList.add('active');
-            document.querySelectorAll('.nav-links button').forEach(b => b.classList.remove('active'));
-            document.querySelector(`.nav-links button[onclick="showPage('${page}')"]`).classList.add('active');
-            if (page === 'players') loadPlayers();
-            if (page === 'tournaments') loadTournaments();
-            if (page === 'teams') { loadTournamentsForSelect('teamsTournamentSelect'); loadTeams(); }
-            if (page === 'matches') { loadTournamentsForSelect('matchTournamentSelect'); }
-        }
-
-        // ============================================================
-        // ИГРОКИ
-        // ============================================================
-        async function loadPlayers() {
-            const list = document.getElementById('playersList');
-            list.innerHTML = '<li class="empty">⏳ Загрузка...</li>';
-            try {
-                const data = await supabaseRequest('/rest/v1/players?select=*&order=name.asc');
-                setStatus('playersStatus', '✅ Игроков: ' + (data?.length || 0), 'success');
-                if (!data || data.length === 0) {
-                    list.innerHTML = '<li class="empty">📋 Нет игроков</li>';
-                    return;
-                }
-                list.innerHTML = data.map(p => `
-                    <li>
-                        <span>${p.name}</span>
-                        <button class="delete-btn" onclick="deletePlayer('${p.id}')">✕</button>
-                    </li>
-                `).join('');
-            } catch (e) {
-                setStatus('playersStatus', '❌ ' + e.message, 'error');
-                list.innerHTML = '<li class="empty">❌ Ошибка</li>';
-            }
-        }
-
-        async function addPlayer() {
-            const input = document.getElementById('playerName');
-            const name = input.value.trim();
-            if (!name) return alert('Введите имя!');
-            const btn = document.querySelector('#page-players .card .flex button');
-            btn.disabled = true; btn.textContent = '⏳...';
-            try {
-                await supabaseRequest('/rest/v1/players', 'POST', [{ name }]);
-                input.value = '';
-                loadPlayers();
-            } catch (e) { alert('❌ ' + e.message); }
-            btn.disabled = false; btn.textContent = '➕ Добавить';
-        }
-
-        async function deletePlayer(id) {
-            if (!confirm('Удалить?')) return;
-            try {
-                await supabaseRequest('/rest/v1/players?id=eq.' + id, 'DELETE');
-                loadPlayers();
-            } catch (e) { alert('❌ ' + e.message); }
-        }
-
-        // ============================================================
-        // ТУРНИРЫ
-        // ============================================================
-        async function loadTournaments() {
-            const list = document.getElementById('tournamentsList');
-            list.innerHTML = '<li class="empty">⏳ Загрузка...</li>';
-            try {
-                const data = await supabaseRequest('/rest/v1/tournaments?select=*&order=created_at.desc');
-                setStatus('tournamentsStatus', '✅ Турниров: ' + (data?.length || 0), 'success');
-                if (!data || data.length === 0) {
-                    list.innerHTML = '<li class="empty">📋 Нет турниров. Создайте первый!</li>';
-                    return;
-                }
-                list.innerHTML = data.map(t => `
-                    <div class="tournament-item">
-                        <div class="info">
-                            <div class="title">${t.title || 'Турнир'}</div>
-                            <div class="date">${t.tournament_date || ''}</div>
-                        </div>
-                        <div class="actions">
-                            <span class="status-badge ${t.status}">${t.status || 'draft'}</span>
-                            <button onclick="deleteTournament('${t.id}')" class="delete-btn">✕</button>
-                        </div>
-                    </div>
-                `).join('');
-            } catch (e) {
-                setStatus('tournamentsStatus', '❌ ' + e.message, 'error');
-                list.innerHTML = '<li class="empty">❌ Ошибка</li>';
-            }
-        }
-
-        async function createTournament() {
-            const title = document.getElementById('tournamentTitle').value.trim() || 'Турнир';
-            const date = document.getElementById('tournamentDate').value || new Date().toISOString().split('T')[0];
-            const btn = document.querySelector('#page-tournaments .card .flex button');
-            btn.disabled = true; btn.textContent = '⏳...';
-            try {
-                const data = await supabaseRequest('/rest/v1/tournaments', 'POST', [{
-                    title,
-                    tournament_date: date,
-                    status: 'draft',
-                    registered_players: []
+            // 2. Создаем команды А, Б, В
+            const teamNames = ['А', 'Б', 'В'];
+            for (const name of teamNames) {
+                await supabaseRequest('/rest/v1/tournament_teams', 'POST', [{
+                    tournament_id: tournamentId,
+                    team_name: name,
+                    wins: 0,
+                    draws: 0,
+                    losses: 0,
+                    goals_for: 0,
+                    goals_against: 0,
+                    points: 0
                 }]);
-                document.getElementById('tournamentTitle').value = '';
-                loadTournaments();
-                alert('✅ Турнир создан! Теперь перейдите в "Команды" для формирования составов.');
-            } catch (e) { alert('❌ ' + e.message); }
-            btn.disabled = false; btn.textContent = '🚀 Создать';
-        }
-
-        async function deleteTournament(id) {
-            if (!confirm('Удалить турнир?')) return;
-            try {
-                await supabaseRequest('/rest/v1/tournaments?id=eq.' + id, 'DELETE');
-                loadTournaments();
-            } catch (e) { alert('❌ ' + e.message); }
-        }
-
-        // ============================================================
-        // КОМАНДЫ
-        // ============================================================
-        let currentTeamsData = { tournamentId: null, teams: {}, players: [] };
-
-        async function loadTournamentsForSelect(selectId) {
-            const select = document.getElementById(selectId);
-            if (!select) return;
-            try {
-                const data = await supabaseRequest('/rest/v1/tournaments?select=id,title,status&order=created_at.desc');
-                const currentVal = select.value;
-                select.innerHTML = '<option value="">Выберите турнир...</option>' +
-                    data.map(t => `<option value="${t.id}">${t.title || 'Турнир'} (${t.status})</option>`).join('');
-                if (currentVal) select.value = currentVal;
-            } catch (e) {
-                console.error('Ошибка загрузки турниров:', e);
             }
+            
+            document.getElementById('tournamentTitle').value = '';
+            loadTournaments();
+            alert('✅ Турнир создан! Команды А, Б, В готовы. Перейдите в "Команды" для распределения игроков.');
+        } catch (e) { 
+            alert('❌ Ошибка: ' + e.message); 
+        }
+        btn.disabled = false; btn.textContent = '🚀 Создать';
+    }
+
+    async function deleteTournament(id) {
+        if (!confirm('Удалить турнир?')) return;
+        try {
+            await supabaseRequest('/rest/v1/tournaments?id=eq.' + id, 'DELETE');
+            loadTournaments();
+        } catch (e) { alert('❌ ' + e.message); }
+    }
+
+    // ============================================================
+    // КОМАНДЫ (ИСПРАВЛЕНО)
+    // ============================================================
+    let currentTeamsData = { tournamentId: null, teams: {}, players: [] };
+
+    async function loadTournamentsForSelect(selectId) {
+        const select = document.getElementById(selectId);
+        if (!select) return;
+        try {
+            const data = await supabaseRequest('/rest/v1/tournaments?select=id,title,status&order=created_at.desc');
+            const currentVal = select.value;
+            select.innerHTML = '<option value="">Выберите турнир...</option>' +
+                data.map(t => `<option value="${t.id}">${t.title || 'Турнир'} (${t.status})</option>`).join('');
+            if (currentVal) select.value = currentVal;
+        } catch (e) {
+            console.error('Ошибка загрузки турниров:', e);
+        }
+    }
+
+    async function loadTeams() {
+        const select = document.getElementById('teamsTournamentSelect');
+        const tournamentId = select.value;
+        const container = document.getElementById('teamsContainer');
+        
+        if (!tournamentId) {
+            container.innerHTML = '<p class="empty">Выберите турнир для формирования команд</p>';
+            return;
         }
 
-        async function loadTeams() {
-            const select = document.getElementById('teamsTournamentSelect');
-            const tournamentId = select.value;
-            const container = document.getElementById('teamsContainer');
+        container.innerHTML = '<p>⏳ Загрузка...</p>';
+        currentTeamsData.tournamentId = tournamentId;
+
+        try {
+            const players = await supabaseRequest('/rest/v1/players?select=*&order=name.asc');
+            currentTeamsData.players = players;
+
+            let teams = await supabaseRequest(`/rest/v1/tournament_teams?select=*&tournament_id=eq.${tournamentId}`);
             
-            if (!tournamentId) {
-                container.innerHTML = '<p class="empty">Выберите турнир для формирования команд</p>';
+            if (!teams || teams.length === 0) {
+                container.innerHTML = '<p class="empty">❌ Нет команд! Создайте турнир заново.</p>';
                 return;
             }
 
-            container.innerHTML = '<p>⏳ Загрузка...</p>';
-            currentTeamsData.tournamentId = tournamentId;
-
-            try {
-                // Получаем всех игроков
-                const players = await supabaseRequest('/rest/v1/players?select=*&order=name.asc');
-                currentTeamsData.players = players;
-
-                // Получаем команды
-                let teams = await supabaseRequest(`/rest/v1/tournament_teams?select=*&tournament_id=eq.${tournamentId}`);
-                
-                // Если команд нет — создаем
-                if (!teams || teams.length === 0) {
-                    const teamNames = ['А', 'Б', 'В'];
-                    for (const name of teamNames) {
-                        await supabaseRequest('/rest/v1/tournament_teams', 'POST', [{
-                            tournament_id: tournamentId,
-                            team_name: name
-                        }]);
-                    }
-                    teams = await supabaseRequest(`/rest/v1/tournament_teams?select=*&tournament_id=eq.${tournamentId}`);
+            const teamPlayers = await supabaseRequest(`/rest/v1/team_players?select=*,player:players(name)&team_id=in.(${teams.map(t => t.id).join(',')})`);
+            
+            const teamMap = {};
+            teams.forEach(t => teamMap[t.id] = { ...t, players: [] });
+            teamPlayers.forEach(tp => {
+                if (teamMap[tp.team_id]) {
+                    const player = currentTeamsData.players.find(p => p.id === tp.player_id);
+                    if (player) teamMap[tp.team_id].players.push(player);
                 }
+            });
 
-                // Получаем составы
-                const teamPlayers = await supabaseRequest(`/rest/v1/team_players?select=*,player:players(name)&team_id=in.(${teams.map(t => t.id).join(',')})`);
+            currentTeamsData.teams = teamMap;
+
+            const teamColors = { 'А': 'team-a', 'Б': 'team-b', 'В': 'team-c' };
+            let html = '<div class="teams-grid">';
+            for (const [id, team] of Object.entries(teamMap)) {
+                const color = teamColors[team.team_name] || '';
+                const availablePlayers = currentTeamsData.players.filter(p => 
+                    !Object.values(teamMap).some(t => t.id !== id && t.players.some(tp => tp.id === p.id))
+                );
                 
-                // Группируем игроков по командам
-                const teamMap = {};
-                teams.forEach(t => teamMap[t.id] = { ...t, players: [] });
-                teamPlayers.forEach(tp => {
-                    if (teamMap[tp.team_id]) {
-                        const player = currentTeamsData.players.find(p => p.id === tp.player_id);
-                        if (player) teamMap[tp.team_id].players.push(player);
-                    }
-                });
-
-                currentTeamsData.teams = teamMap;
-
-                // Показываем
-                const teamColors = { 'А': 'team-a', 'Б': 'team-b', 'В': 'team-c' };
-                let html = '<div class="teams-grid">';
-                for (const [id, team] of Object.entries(teamMap)) {
-                    const color = teamColors[team.team_name] || '';
-                    const playerIds = team.players.map(p => p.id);
-                    const availablePlayers = currentTeamsData.players.filter(p => !Object.values(teamMap).some(t => t.id !== id && t.players.some(tp => tp.id === p.id)));
-                    
-                    html += `
-                        <div class="team-card ${color}">
-                            <h4>Команда ${team.team_name} (${team.players.length}/5)</h4>
-                            <div>
-                                ${team.players.map(p => `
-                                    <span class="player-tag">
-                                        ${p.name}
-                                        <button onclick="removeFromTeam('${id}','${p.id}')" style="border:none;background:none;color:#ef4444;cursor:pointer;">✕</button>
-                                    </span>
-                                `).join('')}
-                                ${team.players.length < 5 ? `<div class="empty-slot">+ свободное место</div>` : ''}
-                            </div>
-                            ${team.players.length < 5 ? `
-                                <select onchange="addToTeam('${id}', this.value)">
-                                    <option value="">+ Добавить игрока</option>
-                                    ${availablePlayers.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
-                                </select>
-                            ` : ''}
+                html += `
+                    <div class="team-card ${color}">
+                        <h4>Команда ${team.team_name} (${team.players.length}/5)</h4>
+                        <div>
+                            ${team.players.map(p => `
+                                <span class="player-tag">
+                                    ${p.name}
+                                    <button onclick="removeFromTeam('${id}','${p.id}')" style="border:none;background:none;color:#ef4444;cursor:pointer;">✕</button>
+                                </span>
+                            `).join('')}
+                            ${team.players.length < 5 ? `<div class="empty-slot">+ свободное место</div>` : ''}
                         </div>
-                    `;
-                }
-                html += '</div>';
-                container.innerHTML = html;
-
-                setStatus('teamsStatus', '✅ Команды загружены', 'success');
-
-            } catch (e) {
-                setStatus('teamsStatus', '❌ ' + e.message, 'error');
-                container.innerHTML = '<p class="empty">❌ Ошибка загрузки</p>';
-            }
-        }
-
-        async function addToTeam(teamId, playerId) {
-            if (!playerId) return;
-            try {
-                await supabaseRequest('/rest/v1/team_players', 'POST', [{
-                    team_id: teamId,
-                    player_id: playerId
-                }]);
-                loadTeams();
-            } catch (e) {
-                alert('❌ ' + e.message);
-            }
-        }
-
-        async function removeFromTeam(teamId, playerId) {
-            if (!confirm('Убрать игрока из команды?')) return;
-            try {
-                await supabaseRequest(`/rest/v1/team_players?team_id=eq.${teamId}&player_id=eq.${playerId}`, 'DELETE');
-                loadTeams();
-            } catch (e) {
-                alert('❌ ' + e.message);
-            }
-        }
-
-        async function autoFillTeams() {
-            const tournamentId = currentTeamsData.tournamentId;
-            if (!tournamentId) return alert('Выберите турнир!');
-            
-            const players = currentTeamsData.players;
-            if (players.length < 9) return alert('Нужно минимум 9 игроков для 3 команд (по 3 человека)');
-
-            try {
-                // Очищаем текущие составы
-                const teams = Object.values(currentTeamsData.teams);
-                for (const team of teams) {
-                    for (const p of team.players) {
-                        await supabaseRequest(`/rest/v1/team_players?team_id=eq.${team.id}&player_id=eq.${p.id}`, 'DELETE');
-                    }
-                }
-
-                // Перемешиваем и распределяем
-                const shuffled = [...players].sort(() => Math.random() - 0.5);
-                const teamIds = Object.keys(currentTeamsData.teams);
-                let idx = 0;
-                for (const player of shuffled) {
-                    const teamId = teamIds[idx % teamIds.length];
-                    await supabaseRequest('/rest/v1/team_players', 'POST', [{
-                        team_id: teamId,
-                        player_id: player.id
-                    }]);
-                    idx++;
-                }
-
-                loadTeams();
-                alert('✅ Игроки распределены по командам!');
-            } catch (e) {
-                alert('❌ ' + e.message);
-            }
-        }
-
-        async function saveTeams() {
-            alert('✅ Составы сохранены! Теперь перейдите в "Матчи" для ввода результатов.');
-        }
-
-        // ============================================================
-        // МАТЧИ
-        // ============================================================
-        let currentMatchesTournamentId = null;
-
-        async function loadMatches() {
-            const tournamentId = document.getElementById('matchTournamentSelect').value;
-            currentMatchesTournamentId = tournamentId;
-            const container = document.getElementById('matchesContainer');
-            
-            if (!tournamentId) {
-                container.innerHTML = '<p class="empty">Выберите турнир для ввода матчей</p>';
-                return;
-            }
-
-            container.innerHTML = '<p>⏳ Загрузка матчей...</p>';
-            try {
-                const teams = await supabaseRequest(`/rest/v1/tournament_teams?select=*&tournament_id=eq.${tournamentId}`);
-                let matches = await supabaseRequest(`/rest/v1/matches?select=*&tournament_id=eq.${tournamentId}`);
-                
-                if (!matches || matches.length === 0) {
-                    container.innerHTML = '<p class="empty">Нет матчей. Нажмите "Создать матчи"</p>';
-                    return;
-                }
-
-                const teamMap = {};
-                teams.forEach(t => teamMap[t.id] = t.team_name);
-
-                container.innerHTML = `
-                    <div style="display:grid;gap:10px;">
-                        ${matches.map(m => `
-                            <div class="match-row">
-                                <span style="font-weight:600;min-width:60px;">Матч ${m.match_number}</span>
-                                <span class="team-name">${teamMap[m.team_a_id] || '?'}</span>
-                                <input type="number" value="${m.score_a || 0}" onchange="updateMatchScore('${m.id}','a',this.value)" ${m.is_finished ? 'disabled' : ''} />
-                                <span>:</span>
-                                <input type="number" value="${m.score_b || 0}" onchange="updateMatchScore('${m.id}','b',this.value)" ${m.is_finished ? 'disabled' : ''} />
-                                <span class="team-name">${teamMap[m.team_b_id] || '?'}</span>
-                                <span class="status-text ${m.is_finished ? 'done' : 'pending'}">${m.is_finished ? '✅ Завершен' : '⏳ Ожидает'}</span>
-                                ${!m.is_finished ? `<button onclick="finishMatch('${m.id}')" style="padding:4px 16px;background:#22c55e;color:white;border:none;border-radius:6px;cursor:pointer;">Завершить</button>` : ''}
-                            </div>
-                        `).join('')}
-                    </div>
-                    <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">
-                        <button onclick="calculateTournament()" style="padding:10px 24px;background:#8b5cf6;color:white;border:none;border-radius:10px;cursor:pointer;font-weight:600;">📊 Рассчитать PEI</button>
-                        <button onclick="finishTournament()" style="padding:10px 24px;background:#ef4444;color:white;border:none;border-radius:10px;cursor:pointer;font-weight:600;">🏁 Завершить турнир</button>
+                        ${team.players.length < 5 ? `
+                            <select onchange="addToTeam('${id}', this.value)">
+                                <option value="">+ Добавить игрока</option>
+                                ${availablePlayers.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
+                            </select>
+                        ` : ''}
                     </div>
                 `;
-                setStatus('matchesStatus', '✅ Матчи загружены', 'success');
-
-            } catch (e) {
-                setStatus('matchesStatus', '❌ ' + e.message, 'error');
-                container.innerHTML = '<p class="empty">❌ Ошибка загрузки</p>';
             }
+            html += '</div>';
+            container.innerHTML = html;
+
+            setStatus('teamsStatus', '✅ Команды загружены', 'success');
+
+        } catch (e) {
+            setStatus('teamsStatus', '❌ ' + e.message, 'error');
+            container.innerHTML = '<p class="empty">❌ Ошибка загрузки</p>';
         }
+    }
 
-        async function generateMatches() {
-            const tournamentId = currentMatchesTournamentId;
-            if (!tournamentId) return alert('Выберите турнир!');
+    async function addToTeam(teamId, playerId) {
+        if (!playerId) return;
+        try {
+            await supabaseRequest('/rest/v1/team_players', 'POST', [{
+                team_id: teamId,
+                player_id: playerId
+            }]);
+            loadTeams();
+        } catch (e) {
+            alert('❌ ' + e.message);
+        }
+    }
 
-            try {
-                const teams = await supabaseRequest(`/rest/v1/tournament_teams?select=*&tournament_id=eq.${tournamentId}`);
-                if (teams.length < 3) return alert('Нужно 3 команды!');
-                
-                // Удаляем старые матчи
-                await supabaseRequest(`/rest/v1/matches?tournament_id=eq.${tournamentId}`, 'DELETE');
-                
-                // Создаем 12 матчей
-                const teamPairs = [
-                    ['А','Б'],['А','В'],['Б','В'],
-                    ['А','Б'],['А','В'],['Б','В'],
-                    ['А','Б'],['А','В'],['Б','В'],
-                    ['А','Б'],['А','В'],['Б','В']
-                ];
-                const teamMap = {};
-                teams.forEach(t => teamMap[t.team_name] = t.id);
-                
-                let matchNum = 1;
-                for (const [a, b] of teamPairs) {
-                    if (teamMap[a] && teamMap[b]) {
-                        await supabaseRequest('/rest/v1/matches', 'POST', [{
-                            tournament_id: tournamentId,
-                            team_a_id: teamMap[a],
-                            team_b_id: teamMap[b],
-                            match_number: matchNum++,
-                            is_finished: false
-                        }]);
-                    }
+    async function removeFromTeam(teamId, playerId) {
+        if (!confirm('Убрать игрока из команды?')) return;
+        try {
+            await supabaseRequest(`/rest/v1/team_players?team_id=eq.${teamId}&player_id=eq.${playerId}`, 'DELETE');
+            loadTeams();
+        } catch (e) {
+            alert('❌ ' + e.message);
+        }
+    }
+
+    async function autoFillTeams() {
+        const tournamentId = currentTeamsData.tournamentId;
+        if (!tournamentId) return alert('Выберите турнир!');
+        
+        const players = currentTeamsData.players;
+        if (players.length < 9) return alert('Нужно минимум 9 игроков для 3 команд (по 3 человека)');
+
+        try {
+            const teams = Object.values(currentTeamsData.teams);
+            for (const team of teams) {
+                for (const p of team.players) {
+                    await supabaseRequest(`/rest/v1/team_players?team_id=eq.${team.id}&player_id=eq.${p.id}`, 'DELETE');
                 }
-                
-                alert('✅ 12 матчей созданы!');
-                loadMatches();
-            } catch (e) {
-                alert('❌ ' + e.message);
             }
-        }
 
-        async function updateMatchScore(matchId, side, value) {
-            const field = side === 'a' ? 'score_a' : 'score_b';
-            try {
-                await supabaseRequest(`/rest/v1/matches?id=eq.${matchId}`, 'PATCH', { [field]: parseInt(value) || 0 });
-            } catch (e) {
-                console.error('Ошибка обновления счета:', e);
+            const shuffled = [...players].sort(() => Math.random() - 0.5);
+            const teamIds = Object.keys(currentTeamsData.teams);
+            let idx = 0;
+            for (const player of shuffled) {
+                const teamId = teamIds[idx % teamIds.length];
+                await supabaseRequest('/rest/v1/team_players', 'POST', [{
+                    team_id: teamId,
+                    player_id: player.id
+                }]);
+                idx++;
             }
+
+            loadTeams();
+            alert('✅ Игроки распределены по командам!');
+        } catch (e) {
+            alert('❌ ' + e.message);
+        }
+    }
+
+    async function saveTeams() {
+        alert('✅ Составы сохранены! Теперь перейдите в "Матчи" для ввода результатов.');
+    }
+
+    // ============================================================
+    // МАТЧИ
+    // ============================================================
+    let currentMatchesTournamentId = null;
+
+    async function loadMatches() {
+        const tournamentId = document.getElementById('matchTournamentSelect').value;
+        currentMatchesTournamentId = tournamentId;
+        const container = document.getElementById('matchesContainer');
+        
+        if (!tournamentId) {
+            container.innerHTML = '<p class="empty">Выберите турнир для ввода матчей</p>';
+            return;
         }
 
-        async function finishMatch(matchId) {
-            try {
-                await supabaseRequest(`/rest/v1/matches?id=eq.${matchId}`, 'PATCH', { is_finished: true });
-                loadMatches();
-                alert('✅ Матч завершен!');
-            } catch (e) {
-                alert('❌ ' + e.message);
+        container.innerHTML = '<p>⏳ Загрузка матчей...</p>';
+        try {
+            const teams = await supabaseRequest(`/rest/v1/tournament_teams?select=*&tournament_id=eq.${tournamentId}`);
+            let matches = await supabaseRequest(`/rest/v1/matches?select=*&tournament_id=eq.${tournamentId}`);
+            
+            if (!matches || matches.length === 0) {
+                container.innerHTML = '<p class="empty">Нет матчей. Нажмите "Создать матчи"</p>';
+                return;
             }
-        }
 
-        async function calculateTournament() {
-            alert('📊 Расчет PEI пока в разработке! Скоро будет готово.');
-        }
+            const teamMap = {};
+            teams.forEach(t => teamMap[t.id] = t.team_name);
 
-        async function finishTournament() {
-            if (!confirm('Завершить турнир? Это действие нельзя отменить!')) return;
-            try {
-                await supabaseRequest(`/rest/v1/tournaments?id=eq.${currentMatchesTournamentId}`, 'PATCH', { status: 'finished' });
-                alert('🏆 Турнир завершен!');
-                loadMatches();
-            } catch (e) {
-                alert('❌ ' + e.message);
+            container.innerHTML = `
+                <div style="display:grid;gap:10px;">
+                    ${matches.map(m => `
+                        <div class="match-row">
+                            <span style="font-weight:600;min-width:60px;">Матч ${m.match_number}</span>
+                            <span class="team-name">${teamMap[m.team_a_id] || '?'}</span>
+                            <input type="number" value="${m.score_a || 0}" onchange="updateMatchScore('${m.id}','a',this.value)" ${m.is_finished ? 'disabled' : ''} />
+                            <span>:</span>
+                            <input type="number" value="${m.score_b || 0}" onchange="updateMatchScore('${m.id}','b',this.value)" ${m.is_finished ? 'disabled' : ''} />
+                            <span class="team-name">${teamMap[m.team_b_id] || '?'}</span>
+                            <span class="status-text ${m.is_finished ? 'done' : 'pending'}">${m.is_finished ? '✅ Завершен' : '⏳ Ожидает'}</span>
+                            ${!m.is_finished ? `<button onclick="finishMatch('${m.id}')" style="padding:4px 16px;background:#22c55e;color:white;border:none;border-radius:6px;cursor:pointer;">Завершить</button>` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+                <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">
+                    <button onclick="calculateTournament()" style="padding:10px 24px;background:#8b5cf6;color:white;border:none;border-radius:10px;cursor:pointer;font-weight:600;">📊 Рассчитать PEI</button>
+                    <button onclick="finishTournament()" style="padding:10px 24px;background:#ef4444;color:white;border:none;border-radius:10px;cursor:pointer;font-weight:600;">🏁 Завершить турнир</button>
+                </div>
+            `;
+            setStatus('matchesStatus', '✅ Матчи загружены', 'success');
+
+        } catch (e) {
+            setStatus('matchesStatus', '❌ ' + e.message, 'error');
+            container.innerHTML = '<p class="empty">❌ Ошибка загрузки</p>';
+        }
+    }
+
+    async function generateMatches() {
+        const tournamentId = currentMatchesTournamentId;
+        if (!tournamentId) return alert('Выберите турнир!');
+
+        try {
+            const teams = await supabaseRequest(`/rest/v1/tournament_teams?select=*&tournament_id=eq.${tournamentId}`);
+            if (teams.length < 3) return alert('Нужно 3 команды!');
+            
+            await supabaseRequest(`/rest/v1/matches?tournament_id=eq.${tournamentId}`, 'DELETE');
+            
+            const teamPairs = [
+                ['А','Б'],['А','В'],['Б','В'],
+                ['А','Б'],['А','В'],['Б','В'],
+                ['А','Б'],['А','В'],['Б','В'],
+                ['А','Б'],['А','В'],['Б','В']
+            ];
+            const teamMap = {};
+            teams.forEach(t => teamMap[t.team_name] = t.id);
+            
+            let matchNum = 1;
+            for (const [a, b] of teamPairs) {
+                if (teamMap[a] && teamMap[b]) {
+                    await supabaseRequest('/rest/v1/matches', 'POST', [{
+                        tournament_id: tournamentId,
+                        team_a_id: teamMap[a],
+                        team_b_id: teamMap[b],
+                        match_number: matchNum++,
+                        is_finished: false
+                    }]);
+                }
             }
+            
+            alert('✅ 12 матчей созданы!');
+            loadMatches();
+        } catch (e) {
+            alert('❌ ' + e.message);
         }
+    }
 
-        // ============================================================
-        // ЗАПУСК
-        // ============================================================
-        loadPlayers();
-        loadTournaments();
-    </script>
+    async function updateMatchScore(matchId, side, value) {
+        const field = side === 'a' ? 'score_a' : 'score_b';
+        try {
+            await supabaseRequest(`/rest/v1/matches?id=eq.${matchId}`, 'PATCH', { [field]: parseInt(value) || 0 });
+        } catch (e) {
+            console.error('Ошибка обновления счета:', e);
+        }
+    }
 
-</body>
-</html>
+    async function finishMatch(matchId) {
+        try {
+            await supabaseRequest(`/rest/v1/matches?id=eq.${matchId}`, 'PATCH', { is_finished: true });
+            loadMatches();
+            alert('✅ Матч завершен!');
+        } catch (e) {
+            alert('❌ ' + e.message);
+        }
+    }
+
+    async function calculateTournament() {
+        alert('📊 Расчет PEI пока в разработке! Скоро будет готово.');
+    }
+
+    async function finishTournament() {
+        if (!confirm('Завершить турнир? Это действие нельзя отменить!')) return;
+        try {
+            await supabaseRequest(`/rest/v1/tournaments?id=eq.${currentMatchesTournamentId}`, 'PATCH', { status: 'finished' });
+            alert('🏆 Турнир завершен!');
+            loadMatches();
+        } catch (e) {
+            alert('❌ ' + e.message);
+        }
+    }
+
+    // ============================================================
+    // ЗАПУСК
+    // ============================================================
+    loadPlayers();
+    loadTournaments();
+</script>
