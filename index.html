@@ -82,6 +82,7 @@
         }
         .delete-btn:hover { background: #fee2e2; }
         .empty { color: #94a3b8; text-align: center; padding: 20px 0; }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
@@ -106,12 +107,14 @@
         // ============================================================
         // 🔑 ВСТАВЬТЕ ВАШИ ДАННЫЕ
         // ============================================================
-        const SUPABASE_URL = 'https://obmhexrwltdtldjdeuxo.supabase.co';   // ЗАМЕНИТЕ
-        const SUPABASE_ANON_KEY = 'sb_publishable_HX4idr3fjs1BvNTwZidseg_oiQddbPX'; // ЗАМЕНИТЕ
+        const MY_SUPABASE_URL = 'https://obmhexrwltdtldjdeuxo.supabase.co';   // ЗАМЕНИТЕ
+        const MY_SUPABASE_KEY = 'sb_publishable_HX4idr3fjs1BvNTwZidseg_oiQddbPX';      // ЗАМЕНИТЕ
         // ============================================================
 
-        // --- ИНИЦИАЛИЗАЦИЯ ---
-        const supabase = supabaseJs.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        // --- ИНИЦИАЛИЗАЦИЯ (используем уникальное имя переменной) ---
+        const sb = supabaseJs.createClient(MY_SUPABASE_URL, MY_SUPABASE_KEY);
+
+        // --- ПОЛУЧАЕМ ЭЛЕМЕНТЫ ---
         const statusEl = document.getElementById('statusMessage');
         const listEl = document.getElementById('playerList');
         const inputEl = document.getElementById('playerName');
@@ -120,7 +123,7 @@
         // --- ФУНКЦИЯ СТАТУСА ---
         function setStatus(message, type = 'loading') {
             statusEl.textContent = message;
-            statusEl.className = `status ${type}`;
+            statusEl.className = 'status ' + type;
         }
 
         // --- ЗАГРУЗКА ИГРОКОВ ---
@@ -128,34 +131,38 @@
             listEl.innerHTML = '<li class="empty">⏳ Загрузка...</li>';
 
             try {
-                const { data, error } = await supabase
+                const { data, error } = await sb
                     .from('players')
                     .select('*')
                     .order('name');
 
                 if (error) {
                     setStatus('❌ Ошибка: ' + error.message, 'error');
-                    listEl.innerHTML = `<li class="empty">❌ ${error.message}</li>`;
+                    listEl.innerHTML = '<li class="empty">❌ ' + error.message + '</li>';
                     console.error('Supabase error:', error);
                     return;
                 }
 
-                setStatus(`✅ Подключено! Игроков: ${data?.length || 0}`, 'success');
+                setStatus('✅ Подключено! Игроков: ' + (data?.length || 0), 'success');
 
                 if (!data || data.length === 0) {
                     listEl.innerHTML = '<li class="empty">📋 Пока нет игроков. Добавьте первого!</li>';
                     return;
                 }
 
-                listEl.innerHTML = data.map(p => `
-                    <li>
-                        <span class="player-name">${p.name}</span>
-                        <button class="delete-btn" data-id="${p.id}">✕</button>
-                    </li>
-                `).join('');
+                let html = '';
+                for (const p of data) {
+                    html += `
+                        <li>
+                            <span class="player-name">${p.name}</span>
+                            <button class="delete-btn" data-id="${p.id}">✕</button>
+                        </li>
+                    `;
+                }
+                listEl.innerHTML = html;
 
-                // --- Навешиваем обработчики на кнопки удаления ---
-                document.querySelectorAll('.delete-btn').forEach(btn => {
+                // --- НАВЕШИВАЕМ ОБРАБОТЧИКИ НА КНОПКИ УДАЛЕНИЯ ---
+                document.querySelectorAll('.delete-btn').forEach(function(btn) {
                     btn.addEventListener('click', function() {
                         deletePlayer(this.dataset.id);
                     });
@@ -163,7 +170,7 @@
 
             } catch (e) {
                 setStatus('❌ Ошибка: ' + e.message, 'error');
-                listEl.innerHTML = `<li class="empty">❌ ${e.message}</li>`;
+                listEl.innerHTML = '<li class="empty">❌ ' + e.message + '</li>';
                 console.error('Error:', e);
             }
         }
@@ -181,7 +188,7 @@
             addBtn.textContent = '⏳...';
 
             try {
-                const { error } = await supabase
+                const { error } = await sb
                     .from('players')
                     .insert([{ name: name }]);
 
@@ -210,7 +217,7 @@
             if (!confirm('Удалить этого игрока?')) return;
 
             try {
-                const { error } = await supabase
+                const { error } = await sb
                     .from('players')
                     .delete()
                     .eq('id', id);
