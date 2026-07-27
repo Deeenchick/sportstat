@@ -4,9 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>⚽ СпортСтат</title>
-    <!-- Пробуем два CDN на случай блокировки -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <style>
         * { box-sizing: border-box; }
         body {
@@ -44,7 +41,6 @@
             border-radius: 10px;
             font-size: 16px;
             outline: none;
-            transition: border-color 0.2s;
         }
         .flex input:focus { border-color: #2563eb; }
         .flex button {
@@ -56,12 +52,9 @@
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
-            transition: background 0.2s;
-            white-space: nowrap;
         }
         .flex button:hover { background: #1d4ed8; }
         .flex button:disabled { background: #94a3b8; cursor: not-allowed; }
-        h3 { color: #334155; margin-bottom: 12px; }
         ul { list-style: none; padding: 0; margin: 0; }
         li {
             display: flex;
@@ -71,7 +64,6 @@
             border-bottom: 1px solid #f1f5f9;
         }
         li:last-child { border-bottom: none; }
-        .player-name { font-weight: 500; }
         .delete-btn {
             color: #ef4444;
             cursor: pointer;
@@ -80,10 +72,10 @@
             font-size: 18px;
             padding: 4px 8px;
             border-radius: 6px;
-            transition: background 0.2s;
         }
         .delete-btn:hover { background: #fee2e2; }
         .empty { color: #94a3b8; text-align: center; padding: 20px 0; }
+        .player-name { font-weight: 500; }
     </style>
 </head>
 <body>
@@ -91,7 +83,7 @@
     <div class="card">
         <h1>⚽ СпортСтат</h1>
 
-        <div id="statusMessage" class="status loading">⏳ Проверка подключения...</div>
+        <div id="statusMessage" class="status loading">⏳ Подключение...</div>
 
         <div class="flex">
             <input id="playerName" placeholder="Введите имя игрока..." />
@@ -106,37 +98,50 @@
 
     <script>
         // ============================================================
-        // 🔑 ВСТАВЬТЕ ВАШИ ДАННЫЕ ИЗ SUPABASE
+        // 🔑 ВАШИ ДАННЫЕ ИЗ SUPABASE (Settings → API)
         // ============================================================
-        const MY_SUPABASE_URL = 'https://obmhexrwltdtldjdeuxo.supabase.co';   // ЗАМЕНИТЕ
-        const MY_SUPABASE_KEY = 'sb_publishable_HX4idr3fjs1BvNTwZidseg_oiQddbPX';      // ЗАМЕНИТЕ
+        const SUPABASE_URL = 'https://obmhexrwltdtldjdeuxo.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_HX4idr3fjs1BvNTwZidseg_oiQddbPX';
         // ============================================================
 
-        // --- ПРОВЕРЯЕМ, ЧТО БИБЛИОТЕКА ЗАГРУЗИЛАСЬ ---
-        let sb;
-
-        // Пробуем получить доступ к библиотеке
-        if (typeof supabaseJs !== 'undefined') {
-            sb = supabaseJs.createClient(MY_SUPABASE_URL, MY_SUPABASE_KEY);
-        } else if (typeof supabase !== 'undefined' && typeof supabase.createClient === 'function') {
-            sb = supabase.createClient(MY_SUPABASE_URL, MY_SUPABASE_KEY);
-        } else {
-            // Если библиотека не загрузилась, показываем ошибку
-            document.getElementById('statusMessage').textContent = '❌ Не удалось загрузить библиотеку Supabase. Проверьте интернет!';
-            document.getElementById('statusMessage').className = 'status error';
-            document.getElementById('playerList').innerHTML = '<li class="empty">❌ Ошибка загрузки библиотеки</li>';
-            throw new Error('Supabase library not loaded');
-        }
-
-        // --- ПОЛУЧАЕМ ЭЛЕМЕНТЫ ---
         const statusEl = document.getElementById('statusMessage');
         const listEl = document.getElementById('playerList');
         const inputEl = document.getElementById('playerName');
         const addBtn = document.getElementById('addBtn');
 
-        // --- ФУНКЦИЯ СТАТУСА ---
-        function setStatus(message, type = 'loading') {
-            statusEl.textContent = message;
+        // --- ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ ЗАПРОСОВ ---
+        async function supabaseRequest(endpoint, method = 'GET', data = null) {
+            const url = SUPABASE_URL + endpoint;
+            
+            const headers = {
+                'apikey': SUPABASE_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_KEY,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=representation'
+            };
+
+            const options = {
+                method: method,
+                headers: headers,
+            };
+
+            if (data) {
+                options.body = JSON.stringify(data);
+            }
+
+            const response = await fetch(url, options);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Ошибка ${response.status}: ${errorText}`);
+            }
+
+            return response.json();
+        }
+
+        // --- СТАТУС ---
+        function setStatus(msg, type = 'loading') {
+            statusEl.textContent = msg;
             statusEl.className = 'status ' + type;
         }
 
@@ -145,17 +150,7 @@
             listEl.innerHTML = '<li class="empty">⏳ Загрузка...</li>';
 
             try {
-                const { data, error } = await sb
-                    .from('players')
-                    .select('*')
-                    .order('name');
-
-                if (error) {
-                    setStatus('❌ Ошибка: ' + error.message, 'error');
-                    listEl.innerHTML = '<li class="empty">❌ ' + error.message + '</li>';
-                    console.error('Supabase error:', error);
-                    return;
-                }
+                const data = await supabaseRequest('/rest/v1/players?select=*&order=name.asc');
 
                 setStatus('✅ Подключено! Игроков: ' + (data?.length || 0), 'success');
 
@@ -165,34 +160,32 @@
                 }
 
                 let html = '';
-                for (const p of data) {
+                data.forEach(p => {
                     html += `
                         <li>
                             <span class="player-name">${p.name}</span>
                             <button class="delete-btn" data-id="${p.id}">✕</button>
                         </li>
                     `;
-                }
+                });
                 listEl.innerHTML = html;
 
-                // --- НАВЕШИВАЕМ ОБРАБОТЧИКИ НА КНОПКИ УДАЛЕНИЯ ---
-                document.querySelectorAll('.delete-btn').forEach(function(btn) {
+                document.querySelectorAll('.delete-btn').forEach(btn => {
                     btn.addEventListener('click', function() {
                         deletePlayer(this.dataset.id);
                     });
                 });
 
             } catch (e) {
-                setStatus('❌ Ошибка: ' + e.message, 'error');
+                setStatus('❌ ' + e.message, 'error');
                 listEl.innerHTML = '<li class="empty">❌ ' + e.message + '</li>';
                 console.error('Error:', e);
             }
         }
 
-        // --- ДОБАВЛЕНИЕ ИГРОКА ---
+        // --- ДОБАВЛЕНИЕ ---
         async function addPlayer() {
             const name = inputEl.value.trim();
-
             if (!name) {
                 alert('Введите имя игрока!');
                 return;
@@ -202,58 +195,33 @@
             addBtn.textContent = '⏳...';
 
             try {
-                const { error } = await sb
-                    .from('players')
-                    .insert([{ name: name }]);
-
-                if (error) {
-                    alert('❌ Ошибка: ' + error.message);
-                    console.error('Insert error:', error);
-                    addBtn.disabled = false;
-                    addBtn.textContent = '➕ Добавить';
-                    return;
-                }
-
+                await supabaseRequest('/rest/v1/players', 'POST', [{ name: name }]);
                 inputEl.value = '';
                 await loadPlayers();
-
             } catch (e) {
                 alert('❌ Ошибка: ' + e.message);
-                console.error('Error:', e);
+                console.error('Add error:', e);
             }
 
             addBtn.disabled = false;
             addBtn.textContent = '➕ Добавить';
         }
 
-        // --- УДАЛЕНИЕ ИГРОКА ---
+        // --- УДАЛЕНИЕ ---
         async function deletePlayer(id) {
             if (!confirm('Удалить этого игрока?')) return;
 
             try {
-                const { error } = await sb
-                    .from('players')
-                    .delete()
-                    .eq('id', id);
-
-                if (error) {
-                    alert('❌ Ошибка: ' + error.message);
-                    console.error('Delete error:', error);
-                    return;
-                }
-
+                await supabaseRequest('/rest/v1/players?id=eq.' + id, 'DELETE');
                 await loadPlayers();
-
             } catch (e) {
                 alert('❌ Ошибка: ' + e.message);
-                console.error('Error:', e);
+                console.error('Delete error:', e);
             }
         }
 
-        // --- НАВЕШИВАЕМ СОБЫТИЕ НА КНОПКУ "ДОБАВИТЬ" ---
+        // --- СОБЫТИЯ ---
         addBtn.addEventListener('click', addPlayer);
-
-        // --- НАЖАТИЕ ENTER В ПОЛЕ ВВОДА ---
         inputEl.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
                 addPlayer();
