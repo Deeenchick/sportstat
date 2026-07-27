@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>СпортСтат</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; }
+        h1 { color: #2563eb; }
+        .input-group { display: flex; gap: 10px; margin-bottom: 20px; }
+        .input-group input { flex: 1; padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; }
+        .input-group button { padding: 8px 16px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; }
+        .input-group button:hover { background: #1d4ed8; }
+        .player-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
+        .delete-btn { color: red; cursor: pointer; background: none; border: none; }
+        .delete-btn:hover { color: darkred; }
+        .empty { color: #888; }
+    </style>
+</head>
+<body>
+    <h1>⚽ СпортСтат</h1>
+    
+    <div class="input-group">
+        <input id="playerName" placeholder="Введите имя игрока..." />
+        <button onclick="addPlayer()">➕ Добавить</button>
+    </div>
+    
+    <div id="playerList"></div>
+
+    <script>
+        // ======= ВСТАВЬТЕ ВАШИ ДАННЫЕ =======
+        const supabase = supabaseJs.createClient(
+           'https://obmhexrwltdtldjdeuxo.supabase.co',
+            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ibWhleHJ3bHRkdGxkamRldXhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxMzY1MDYsImV4cCI6MjEwMDcxMjUwNn0.JcReg2I4AgyVzxOtc9g5wo72250fW_MVJgeH6XjkFbE'
+        );
+        // ====================================
+
+        async function loadPlayers() {
+            const { data, error } = await supabase.from('players').select('*').order('name');
+            
+            const list = document.getElementById('playerList');
+            
+            if (error) {
+                list.innerHTML = `<div style="color:red;">❌ Ошибка: ${error.message}</div>`;
+                return;
+            }
+            
+            if (!data || data.length === 0) {
+                list.innerHTML = '<div class="empty">Пока нет игроков. Добавьте первого!</div>';
+                return;
+            }
+            
+            list.innerHTML = data.map(p => `
+                <div class="player-item">
+                    <span>${p.name}</span>
+                    <button class="delete-btn" onclick="deletePlayer('${p.id}')">✕</button>
+                </div>
+            `).join('');
+        }
+
+        async function addPlayer() {
+            const input = document.getElementById('playerName');
+            const name = input.value.trim();
+            
+            if (!name) {
+                alert('Введите имя игрока!');
+                return;
+            }
+            
+            const { error } = await supabase.from('players').insert([{ name }]);
+            
+            if (error) {
+                alert('❌ Ошибка: ' + error.message);
+                return;
+            }
+            
+            input.value = '';
+            loadPlayers();
+        }
+
+        async function deletePlayer(id) {
+            if (!confirm('Удалить игрока?')) return;
+            
+            const { error } = await supabase.from('players').delete().eq('id', id);
+            
+            if (error) {
+                alert('❌ Ошибка: ' + error.message);
+                return;
+            }
+            
+            loadPlayers();
+        }
+
+        // Загружаем игроков при открытии страницы
+        loadPlayers();
+    </script>
+</body>
+</html>
