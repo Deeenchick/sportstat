@@ -22,12 +22,16 @@ const pageLoadStatus = {};
 async function showPage(page) {
     console.log(`📄 Переход на страницу: ${page}`);
     
+    // Проверяем, существует ли контейнер страницы
+    const pageEl = document.getElementById('page-' + page);
+    if (!pageEl) {
+        console.error(`❌ Контейнер page-${page} не найден`);
+        return;
+    }
+    
     // Переключаем видимость страниц
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    const pageEl = document.getElementById('page-' + page);
-    if (pageEl) {
-        pageEl.classList.add('active');
-    }
+    pageEl.classList.add('active');
     
     // Обновляем навигацию
     document.querySelectorAll('.nav-links button').forEach(b => b.classList.remove('active'));
@@ -55,6 +59,15 @@ async function showPage(page) {
                         pageLoadStatus.players = true;
                     } else {
                         console.warn('⚠️ Функция loadPlayers не определена');
+                        // Если функция не определена, показываем сообщение
+                        if (!pageEl.innerHTML) {
+                            pageEl.innerHTML = `
+                                <div class="card">
+                                    <div class="status error">❌ Ошибка: функция loadPlayers не определена</div>
+                                    <button onclick="location.reload()" class="btn-success">🔄 Перезагрузить</button>
+                                </div>
+                            `;
+                        }
                     }
                 }
                 break;
@@ -66,39 +79,89 @@ async function showPage(page) {
                         pageLoadStatus.tournaments = true;
                     } else {
                         console.warn('⚠️ Функция loadTournaments не определена');
+                        if (!pageEl.innerHTML) {
+                            pageEl.innerHTML = `
+                                <div class="card">
+                                    <div class="status error">❌ Ошибка: функция loadTournaments не определена</div>
+                                    <button onclick="location.reload()" class="btn-success">🔄 Перезагрузить</button>
+                                </div>
+                            `;
+                        }
                     }
                 }
                 break;
                 
             case 'teams':
+                // Сначала загружаем турниры для select
                 if (typeof loadTournamentsForSelect === 'function') {
                     await loadTournamentsForSelect('teamsTournamentSelect');
+                } else {
+                    console.warn('⚠️ Функция loadTournamentsForSelect не определена');
                 }
+                
+                // Затем загружаем команды
                 if (typeof loadTeams === 'function') {
                     await loadTeams();
+                    pageLoadStatus.teams = true;
+                } else {
+                    console.warn('⚠️ Функция loadTeams не определена');
+                    if (!pageEl.innerHTML) {
+                        pageEl.innerHTML = `
+                            <div class="card">
+                                <div class="status error">❌ Ошибка: функция loadTeams не определена</div>
+                                <button onclick="location.reload()" class="btn-success">🔄 Перезагрузить</button>
+                            </div>
+                        `;
+                    }
                 }
-                pageLoadStatus.teams = true;
                 break;
                 
             case 'matches':
+                // Сначала загружаем турниры для select
                 if (typeof loadTournamentsForSelect === 'function') {
                     await loadTournamentsForSelect('matchTournamentSelect');
+                } else {
+                    console.warn('⚠️ Функция loadTournamentsForSelect не определена');
                 }
+                
+                // Затем загружаем матчи
                 if (typeof loadMatches === 'function') {
                     await loadMatches();
+                    pageLoadStatus.matches = true;
+                } else {
+                    console.warn('⚠️ Функция loadMatches не определена');
+                    if (!pageEl.innerHTML) {
+                        pageEl.innerHTML = `
+                            <div class="card">
+                                <div class="status error">❌ Ошибка: функция loadMatches не определена</div>
+                                <button onclick="location.reload()" class="btn-success">🔄 Перезагрузить</button>
+                            </div>
+                        `;
+                    }
                 }
-                pageLoadStatus.matches = true;
                 break;
                 
             default:
                 console.warn(`⚠️ Неизвестная страница: ${page}`);
+                pageEl.innerHTML = `
+                    <div class="card">
+                        <div class="status error">❌ Страница "${page}" не найдена</div>
+                    </div>
+                `;
         }
     } catch (e) {
         console.error(`❌ Ошибка загрузки страницы ${page}:`, e);
+        
+        // Показываем сообщение об ошибке в контейнере
+        pageEl.innerHTML = `
+            <div class="card">
+                <div class="status error">❌ Ошибка загрузки: ${e.message}</div>
+                <button onclick="showPage('${page}')" class="btn-success" style="margin-top: 12px;">🔄 Попробовать снова</button>
+            </div>
+        `;
+        
         if (typeof showNotification === 'function') {
             showNotification(`Ошибка загрузки: ${e.message}`, 'error');
-        } else {
-            alert(`Ошибка: ${e.message}`);
         }
     } finally {
         // Скрываем индикатор загрузки
@@ -329,9 +392,18 @@ document.addEventListener('DOMContentLoaded', function() {
     updateOnlineStatus();
     
     // --- ЗАПУСК ---
-    // Загружаем начальную страницу (Игроки)
+    // Проверяем, есть ли страница players, и загружаем ее
     setTimeout(() => {
-        showPage('players');
+        const playersPage = document.getElementById('page-players');
+        if (playersPage) {
+            showPage('players');
+        } else {
+            console.error('❌ Страница players не найдена');
+            // Если нет страницы players, пробуем загрузить tournaments
+            if (document.getElementById('page-tournaments')) {
+                showPage('tournaments');
+            }
+        }
     }, 100);
     
     // --- АВТООБНОВЛЕНИЕ ---
@@ -410,3 +482,30 @@ if (window._appLoaded) {
 } else {
     window._appLoaded = true;
 }
+
+// ============================================================
+// ДИАГНОСТИКА
+// ============================================================
+
+// Функция для проверки статуса всех страниц
+function checkPagesStatus() {
+    console.log('📊 Статус страниц:');
+    console.log('  page-players:', document.getElementById('page-players') ? '✅' : '❌');
+    console.log('  page-tournaments:', document.getElementById('page-tournaments') ? '✅' : '❌');
+    console.log('  page-teams:', document.getElementById('page-teams') ? '✅' : '❌');
+    console.log('  page-matches:', document.getElementById('page-matches') ? '✅' : '❌');
+    
+    console.log('📊 Статус функций:');
+    console.log('  loadPlayers:', typeof loadPlayers === 'function' ? '✅' : '❌');
+    console.log('  loadTournaments:', typeof loadTournaments === 'function' ? '✅' : '❌');
+    console.log('  loadTeams:', typeof loadTeams === 'function' ? '✅' : '❌');
+    console.log('  loadMatches:', typeof loadMatches === 'function' ? '✅' : '❌');
+    console.log('  loadTournamentsForSelect:', typeof loadTournamentsForSelect === 'function' ? '✅' : '❌');
+    console.log('  supabaseRequest:', typeof supabaseRequest === 'function' ? '✅' : '❌');
+}
+
+// Делаем диагностическую функцию доступной глобально
+window.checkPagesStatus = checkPagesStatus;
+
+// Запускаем диагностику после загрузки
+setTimeout(checkPagesStatus, 500);
