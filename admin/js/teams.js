@@ -14,6 +14,7 @@ async function loadTeams() {
                 <select id="teamsTournamentSelect" onchange="loadTeamsData()">
                     <option value="">Выберите турнир...</option>
                 </select>
+                <button onclick="createMissingTeams()" class="warning">🔧 Создать команды</button>
                 <button onclick="autoFillTeams()" class="warning">⚡ Заполнить случайно</button>
                 <button onclick="saveTeams()" class="success">💾 Сохранить составы</button>
             </div>
@@ -28,20 +29,66 @@ async function loadTeamsData() {
     const select = document.getElementById('teamsTournamentSelect');
     const tournamentId = select?.value;
     const container = document.getElementById('teamsContainer');
-    if (!tournamentId || !container) return;
+    const statusEl = document.getElementById('teamsStatus');
+    
+    if (!tournamentId || !container) {
+        if (container) container.innerHTML = '<p class="empty">Выберите турнир</p>';
+        return;
+    }
     
     container.innerHTML = '<p>⏳ Загрузка...</p>';
+    if (statusEl) {
+        statusEl.textContent = '⏳ Загрузка команд...';
+        statusEl.className = 'status loading';
+    }
+    
     currentTeamsData.tournamentId = tournamentId;
 
     try {
+        // 1. Получаем всех игроков
         const players = await supabaseRequest('/rest/v1/players?select=*&order=name.asc');
         currentTeamsData.players = players;
+        console.log('✅ Игроков загружено:', players.length);
+
+        // 2. Получаем команды для этого турнира
         let teams = await supabaseRequest(`/rest/v1/tournament_teams?select=*&tournament_id=eq.${tournamentId}`);
+        console.log('🏆 Команд найдено:', teams?.length || 0);
+        
+        // 3. Если команд нет — создаем
         if (!teams || teams.length === 0) {
-            container.innerHTML = '<p class="empty">❌ Нет команд! Создайте турнир заново.</p>';
+            console.log('⚠️ Команд нет, создаем...');
+            const teamNames = ['А', 'Б', 'В'];
+            for (const name of teamNames) {
+                await supabaseRequest('/rest/v1/tournament_teams', 'POST', [{
+                    tournament_id: tournamentId,
+                    team_name: name,
+                    wins: 0, draws: 0, losses: 0,
+                    goals_for: 0, goals_against: 0, points: 0
+                }]);
+            }
+            // Перезагружаем команды
+            teams = await supabaseRequest(`/rest/v1/tournament_teams?select=*&tournament_id=eq.${tournamentId}`);
+            console.log('✅ Создано команд:', teams?.length || 0);
+        }
+
+        if (!teams || teams.length === 0) {
+            container.innerHTML = '<p class="empty">❌ Не удалось создать команды. Попробуйте нажать "Создать команды"</p>';
+            if (statusEl) {
+                statusEl.textContent = '❌ Ошибка: команды не созданы';
+                statusEl.className = 'status error';
+            }
             return;
         }
-        const teamPlayers = await supabaseRequest(`/rest/v1/team_players?select=*,player:players(name)&team_id=in.(${teams.map(t => t.id).join(',')})`);
+
+        // 4. Получаем составы команд
+        const teamIds = teams.map(t => t.id).join(',');
+        let teamPlayers = [];
+        if (teamIds) {
+            teamPlayers = await supabaseRequest(`/rest/v1/team_players?select=*,player:players(name)&team_id=in.(${teamIds})`);
+        }
+        console.log('👥 Составов загружено:', teamPlayers?.length || 0);
+
+        // 5. Группируем игроков по командам
         const teamMap = {};
         teams.forEach(t => teamMap[t.id] = { ...t, players: [] });
         teamPlayers.forEach(tp => {
@@ -52,13 +99,16 @@ async function loadTeamsData() {
         });
         currentTeamsData.teams = teamMap;
 
+        // 6. Показываем
         const teamColors = { 'А': 'team-a', 'Б': 'team-b', 'В': 'team-c' };
         let html = '<div class="teams-grid">';
         for (const [id, team] of Object.entries(teamMap)) {
             const color = teamColors[team.team_name] || '';
+            // Доступные игроки (не в других командах)
             const availablePlayers = currentTeamsData.players.filter(p => 
                 !Object.values(teamMap).some(t => t.id !== id && t.players.some(tp => tp.id === p.id))
             );
+            
             html += `
                 <div class="team-card ${color}">
                     <h4>Команда ${team.team_name} (${team.players.length}/5)</h4>
@@ -82,13 +132,46 @@ async function loadTeamsData() {
         }
         html += '</div>';
         container.innerHTML = html;
-        setStatus('teamsStatus', '✅ Команды загружены', 'success');
+        
+        if (statusEl) {
+            statusEl.textContent = '✅ Команды загружены (' + Object.keys(teamMap).length + ' команд)';
+            statusEl.className = 'status success';
+        }
+
     } catch (e) {
-        setStatus('teamsStatus', '❌ ' + e.message, 'error');
-        container.innerHTML = '<p class="empty">❌ Ошибка загрузки</p>';
+        console.error('❌ Ошибка загрузки команд:', e);
+        if (statusEl) {
+            statusEl.textContent = '❌ ' + e.message;
+            statusEl.className = 'status error';
+        }
+        container.innerHTML = '<p class="empty">❌ Ошибка загрузки: ' + e.message + '</p>';
     }
 }
 
+// --- НОВАЯ ФУНКЦИЯ: ПРИНУДИТЕЛЬНОЕ СОЗДАНИЕ КОМАНД ---
+async function createMissingTeams() {
+    const select = document.getElementById('teamsTournamentSelect');
+    const tournamentId = select?.value;
+    if (!tournamentId) return alert('Сначала выберите турнир!');
+    
+    try {
+        const teamNames = ['А', 'Б', 'В'];
+        for (const name of teamNames) {
+            await supabaseRequest('/rest/v1/tournament_teams', 'POST', [{
+                tournament_id: tournamentId,
+                team_name: name,
+                wins: 0, draws: 0, losses: 0,
+                goals_for: 0, goals_against: 0, points: 0
+            }]);
+        }
+        alert('✅ Команды А, Б, В созданы!');
+        loadTeamsData();
+    } catch (e) {
+        alert('❌ Ошибка: ' + e.message);
+    }
+}
+
+// --- ОСТАЛЬНЫЕ ФУНКЦИИ БЕЗ ИЗМЕНЕНИЙ ---
 async function addToTeam(teamId, playerId) {
     if (!playerId) return;
     try {
@@ -131,5 +214,5 @@ async function autoFillTeams() {
 }
 
 async function saveTeams() {
-    alert('✅ Составы сохранены! Перейдите в "Матчи".');
+    alert('✅ Составы сохранены! Перейдите в "Матчи" и нажмите "Создать матчи".');
 }
