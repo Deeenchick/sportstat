@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>⚽ СпортСтат</title>
+    <!-- Пробуем два CDN на случай блокировки -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <style>
         * { box-sizing: border-box; }
         body {
@@ -82,7 +84,6 @@
         }
         .delete-btn:hover { background: #fee2e2; }
         .empty { color: #94a3b8; text-align: center; padding: 20px 0; }
-        .hidden { display: none; }
     </style>
 </head>
 <body>
@@ -90,7 +91,7 @@
     <div class="card">
         <h1>⚽ СпортСтат</h1>
 
-        <div id="statusMessage" class="status loading">⏳ Подключение к Supabase...</div>
+        <div id="statusMessage" class="status loading">⏳ Проверка подключения...</div>
 
         <div class="flex">
             <input id="playerName" placeholder="Введите имя игрока..." />
@@ -105,14 +106,27 @@
 
     <script>
         // ============================================================
-        // 🔑 ВСТАВЬТЕ ВАШИ ДАННЫЕ
+        // 🔑 ВСТАВЬТЕ ВАШИ ДАННЫЕ ИЗ SUPABASE
         // ============================================================
         const MY_SUPABASE_URL = 'https://obmhexrwltdtldjdeuxo.supabase.co';   // ЗАМЕНИТЕ
         const MY_SUPABASE_KEY = 'sb_publishable_HX4idr3fjs1BvNTwZidseg_oiQddbPX';      // ЗАМЕНИТЕ
         // ============================================================
 
-        // --- ИНИЦИАЛИЗАЦИЯ (используем уникальное имя переменной) ---
-        const sb = supabaseJs.createClient(MY_SUPABASE_URL, MY_SUPABASE_KEY);
+        // --- ПРОВЕРЯЕМ, ЧТО БИБЛИОТЕКА ЗАГРУЗИЛАСЬ ---
+        let sb;
+
+        // Пробуем получить доступ к библиотеке
+        if (typeof supabaseJs !== 'undefined') {
+            sb = supabaseJs.createClient(MY_SUPABASE_URL, MY_SUPABASE_KEY);
+        } else if (typeof supabase !== 'undefined' && typeof supabase.createClient === 'function') {
+            sb = supabase.createClient(MY_SUPABASE_URL, MY_SUPABASE_KEY);
+        } else {
+            // Если библиотека не загрузилась, показываем ошибку
+            document.getElementById('statusMessage').textContent = '❌ Не удалось загрузить библиотеку Supabase. Проверьте интернет!';
+            document.getElementById('statusMessage').className = 'status error';
+            document.getElementById('playerList').innerHTML = '<li class="empty">❌ Ошибка загрузки библиотеки</li>';
+            throw new Error('Supabase library not loaded');
+        }
 
         // --- ПОЛУЧАЕМ ЭЛЕМЕНТЫ ---
         const statusEl = document.getElementById('statusMessage');
