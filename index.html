@@ -2,122 +2,246 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>⚽ СпортСтат</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        body { font-family: system-ui; max-width: 600px; margin: 50px auto; padding: 20px; }
-        .card { background: white; padding: 24px; border-radius: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .status { padding: 12px; border-radius: 8px; margin: 16px 0; }
-        .success { background: #dcfce7; color: #166534; }
-        .error { background: #fee2e2; color: #991b1b; }
-        .flex { display: flex; gap: 12px; margin-bottom: 20px; }
-        .flex input { flex: 1; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; }
-        button { padding: 10px 20px; background: #2563eb; color: white; border: none; border-radius: 8px; cursor: pointer; }
-        button:hover { background: #1d4ed8; }
-        ul { list-style: none; padding: 0; }
-        li { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f1f5f9; }
-        .delete { color: red; cursor: pointer; background: none; border: none; }
+        * { box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f1f5f9;
+        }
+        .card {
+            background: white;
+            padding: 24px;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 { margin-top: 0; color: #1e293b; }
+        .status {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin: 16px 0;
+            font-weight: 500;
+        }
+        .status.loading { background: #f1f5f9; color: #475569; }
+        .status.success { background: #dcfce7; color: #166534; }
+        .status.error { background: #fee2e2; color: #991b1b; }
+        .flex {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .flex input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .flex input:focus { border-color: #2563eb; }
+        .flex button {
+            padding: 12px 24px;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            white-space: nowrap;
+        }
+        .flex button:hover { background: #1d4ed8; }
+        .flex button:disabled { background: #94a3b8; cursor: not-allowed; }
+        h3 { color: #334155; margin-bottom: 12px; }
+        ul { list-style: none; padding: 0; margin: 0; }
+        li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        li:last-child { border-bottom: none; }
+        .player-name { font-weight: 500; }
+        .delete-btn {
+            color: #ef4444;
+            cursor: pointer;
+            background: none;
+            border: none;
+            font-size: 18px;
+            padding: 4px 8px;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+        .delete-btn:hover { background: #fee2e2; }
+        .empty { color: #94a3b8; text-align: center; padding: 20px 0; }
     </style>
 </head>
 <body>
+
     <div class="card">
         <h1>⚽ СпортСтат</h1>
-        <div id="statusMessage" class="status">⏳ Проверка...</div>
+
+        <div id="statusMessage" class="status loading">⏳ Подключение к Supabase...</div>
 
         <div class="flex">
-            <input id="playerName" placeholder="Имя игрока..." />
-            <button onclick="addPlayer()">➕ Добавить</button>
+            <input id="playerName" placeholder="Введите имя игрока..." />
+            <button id="addBtn">➕ Добавить</button>
         </div>
 
-        <h3>Игроки</h3>
-        <ul id="playerList"></ul>
+        <h3>📋 Игроки</h3>
+        <ul id="playerList">
+            <li class="empty">Загрузка...</li>
+        </ul>
     </div>
 
     <script>
         // ============================================================
-        // 🔑 ВСТАВЬТЕ СВОИ ДАННЫЕ
+        // 🔑 ВСТАВЬТЕ ВАШИ ДАННЫЕ
         // ============================================================
         const SUPABASE_URL = 'https://obmhexrwltdtldjdeuxo.supabase.co';   // ЗАМЕНИТЕ
         const SUPABASE_ANON_KEY = 'sb_publishable_HX4idr3fjs1BvNTwZidseg_oiQddbPX'; // ЗАМЕНИТЕ
         // ============================================================
 
+        // --- ИНИЦИАЛИЗАЦИЯ ---
         const supabase = supabaseJs.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const statusEl = document.getElementById('statusMessage');
+        const listEl = document.getElementById('playerList');
+        const inputEl = document.getElementById('playerName');
+        const addBtn = document.getElementById('addBtn');
 
-        function setStatus(msg, isError = false) {
-            const el = document.getElementById('statusMessage');
-            el.textContent = msg;
-            el.className = `status ${isError ? 'error' : 'success'}`;
+        // --- ФУНКЦИЯ СТАТУСА ---
+        function setStatus(message, type = 'loading') {
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
         }
 
+        // --- ЗАГРУЗКА ИГРОКОВ ---
         async function loadPlayers() {
-            const list = document.getElementById('playerList');
-            list.innerHTML = '⏳ Загрузка...';
+            listEl.innerHTML = '<li class="empty">⏳ Загрузка...</li>';
 
             try {
-                const { data, error } = await supabase.from('players').select('*').order('name');
+                const { data, error } = await supabase
+                    .from('players')
+                    .select('*')
+                    .order('name');
 
                 if (error) {
-                    setStatus('❌ ' + error.message, true);
-                    list.innerHTML = '❌ Ошибка. Смотрите консоль (F12).';
-                    console.error(error);
+                    setStatus('❌ Ошибка: ' + error.message, 'error');
+                    listEl.innerHTML = `<li class="empty">❌ ${error.message}</li>`;
+                    console.error('Supabase error:', error);
                     return;
                 }
 
-                setStatus('✅ Подключено! Игроков: ' + (data?.length || 0));
+                setStatus(`✅ Подключено! Игроков: ${data?.length || 0}`, 'success');
 
                 if (!data || data.length === 0) {
-                    list.innerHTML = '📋 Пока нет игроков. Добавьте первого!';
+                    listEl.innerHTML = '<li class="empty">📋 Пока нет игроков. Добавьте первого!</li>';
                     return;
                 }
 
-                list.innerHTML = data.map(p => `
+                listEl.innerHTML = data.map(p => `
                     <li>
-                        <span>${p.name}</span>
-                        <button class="delete" onclick="deletePlayer('${p.id}')">✕</button>
+                        <span class="player-name">${p.name}</span>
+                        <button class="delete-btn" data-id="${p.id}">✕</button>
                     </li>
                 `).join('');
 
+                // --- Навешиваем обработчики на кнопки удаления ---
+                document.querySelectorAll('.delete-btn').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        deletePlayer(this.dataset.id);
+                    });
+                });
+
             } catch (e) {
-                setStatus('❌ ' + e.message, true);
-                list.innerHTML = '❌ Ошибка соединения.';
-                console.error(e);
+                setStatus('❌ Ошибка: ' + e.message, 'error');
+                listEl.innerHTML = `<li class="empty">❌ ${e.message}</li>`;
+                console.error('Error:', e);
             }
         }
 
+        // --- ДОБАВЛЕНИЕ ИГРОКА ---
         async function addPlayer() {
-            const input = document.getElementById('playerName');
-            const name = input.value.trim();
-            if (!name) return alert('Введите имя!');
+            const name = inputEl.value.trim();
 
-            const btn = event.target;
-            btn.textContent = '⏳...';
-            btn.disabled = true;
+            if (!name) {
+                alert('Введите имя игрока!');
+                return;
+            }
+
+            addBtn.disabled = true;
+            addBtn.textContent = '⏳...';
 
             try {
-                const { error } = await supabase.from('players').insert([{ name }]);
-                if (error) throw error;
-                input.value = '';
-                loadPlayers();
+                const { error } = await supabase
+                    .from('players')
+                    .insert([{ name: name }]);
+
+                if (error) {
+                    alert('❌ Ошибка: ' + error.message);
+                    console.error('Insert error:', error);
+                    addBtn.disabled = false;
+                    addBtn.textContent = '➕ Добавить';
+                    return;
+                }
+
+                inputEl.value = '';
+                await loadPlayers();
+
             } catch (e) {
-                alert('❌ ' + e.message);
-                console.error(e);
-            } finally {
-                btn.textContent = '➕ Добавить';
-                btn.disabled = false;
+                alert('❌ Ошибка: ' + e.message);
+                console.error('Error:', e);
             }
+
+            addBtn.disabled = false;
+            addBtn.textContent = '➕ Добавить';
         }
 
+        // --- УДАЛЕНИЕ ИГРОКА ---
         async function deletePlayer(id) {
-            if (!confirm('Удалить?')) return;
+            if (!confirm('Удалить этого игрока?')) return;
+
             try {
-                await supabase.from('players').delete().eq('id', id);
-                loadPlayers();
+                const { error } = await supabase
+                    .from('players')
+                    .delete()
+                    .eq('id', id);
+
+                if (error) {
+                    alert('❌ Ошибка: ' + error.message);
+                    console.error('Delete error:', error);
+                    return;
+                }
+
+                await loadPlayers();
+
             } catch (e) {
-                alert('❌ ' + e.message);
+                alert('❌ Ошибка: ' + e.message);
+                console.error('Error:', e);
             }
         }
 
+        // --- НАВЕШИВАЕМ СОБЫТИЕ НА КНОПКУ "ДОБАВИТЬ" ---
+        addBtn.addEventListener('click', addPlayer);
+
+        // --- НАЖАТИЕ ENTER В ПОЛЕ ВВОДА ---
+        inputEl.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                addPlayer();
+            }
+        });
+
+        // --- ЗАПУСК ---
         loadPlayers();
     </script>
+
 </body>
 </html>
