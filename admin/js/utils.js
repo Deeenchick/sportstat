@@ -1,5 +1,5 @@
 // ============================================================
-// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (УЛУЧШЕННЫЕ)
+// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 // ============================================================
 
 // --- КОНФИГУРАЦИЯ ---
@@ -13,7 +13,7 @@ const API_CONFIG = {
 // --- КЭШ ---
 const cache = new Map();
 
-// --- ЗАПРОС К SUPABASE (УЛУЧШЕННЫЙ) ---
+// --- ЗАПРОС К SUPABASE ---
 async function supabaseRequest(endpoint, method = 'GET', data = null, options = {}) {
     const {
         retries = API_CONFIG.retries,
@@ -155,7 +155,7 @@ function invalidateCacheForEndpoint(endpoint) {
     console.log(`🧹 Кэш для ${endpoint} очищен`);
 }
 
-// --- УСТАНОВКА СТАТУСА (УЛУЧШЕННАЯ) ---
+// --- УСТАНОВКА СТАТУСА ---
 function setStatus(id, msg, type = 'loading') {
     const el = document.getElementById(id);
     if (el) {
@@ -245,7 +245,7 @@ function showNotification(message, type = 'info', duration = 3000) {
     }
 }
 
-// --- ЗАГРУЗКА ТУРНИРОВ ДЛЯ SELECT (УЛУЧШЕННАЯ) ---
+// --- ЗАГРУЗКА ТУРНИРОВ ДЛЯ SELECT ---
 async function loadTournamentsForSelect(selectId, preserveValue = true) {
     const select = document.getElementById(selectId);
     if (!select) {
@@ -286,94 +286,6 @@ async function loadTournamentsForSelect(selectId, preserveValue = true) {
     }
 }
 
-// --- ПЕРЕКЛЮЧЕНИЕ СТРАНИЦ (УЛУЧШЕННОЕ) ---
-const pageLoadStatus = {};
-
-async function showPage(page) {
-    console.log(`📄 Переход на страницу: ${page}`);
-    
-    // Переключаем видимость страниц
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    const pageEl = document.getElementById('page-' + page);
-    if (pageEl) {
-        pageEl.classList.add('active');
-    }
-    
-    // Обновляем навигацию
-    document.querySelectorAll('.nav-links button').forEach(b => b.classList.remove('active'));
-    const navBtn = document.querySelector(`.nav-links button[data-page="${page}"]`);
-    if (navBtn) {
-        navBtn.classList.add('active');
-    }
-    
-    // Загружаем данные для страницы (только если не загружены или принудительно)
-    const forceReload = pageLoadStatus[page] === undefined || 
-                        (page === 'teams' || page === 'matches');
-    
-    try {
-        switch(page) {
-            case 'players':
-                if (forceReload || !pageLoadStatus.players) {
-                    await loadPlayers();
-                    pageLoadStatus.players = true;
-                }
-                break;
-                
-            case 'tournaments':
-                if (forceReload || !pageLoadStatus.tournaments) {
-                    await loadTournaments();
-                    pageLoadStatus.tournaments = true;
-                }
-                break;
-                
-            case 'teams':
-                await Promise.all([
-                    loadTournamentsForSelect('teamsTournamentSelect'),
-                    loadTeams()
-                ]);
-                pageLoadStatus.teams = true;
-                break;
-                
-            case 'matches':
-                await loadTournamentsForSelect('matchTournamentSelect');
-                await loadMatches();
-                pageLoadStatus.matches = true;
-                break;
-        }
-    } catch (e) {
-        console.error(`❌ Ошибка загрузки страницы ${page}:`, e);
-        showNotification(`Ошибка загрузки: ${e.message}`, 'error');
-    }
-}
-
-// --- ОБНОВЛЕНИЕ ВСЕХ ДАННЫХ ---
-async function refreshAll() {
-    console.log('🔄 Обновление всех данных...');
-    
-    clearCache();
-    pageLoadStatus.teams = false;
-    pageLoadStatus.matches = false;
-    pageLoadStatus.players = false;
-    pageLoadStatus.tournaments = false;
-    
-    const currentPage = document.querySelector('.page.active');
-    if (currentPage) {
-        const pageId = currentPage.id.replace('page-', '');
-        await showPage(pageId);
-    }
-    
-    showNotification('✅ Все данные обновлены', 'success');
-}
-
-// --- ПРОВЕРКА ИНТЕРНЕТ СОЕДИНЕНИЯ ---
-function checkConnection() {
-    if (!navigator.onLine) {
-        showNotification('📡 Нет интернет-соединения', 'error', 0);
-        return false;
-    }
-    return true;
-}
-
 // --- ЭКРАНИРОВАНИЕ HTML ---
 function escapeHtml(text) {
     if (!text) return '';
@@ -397,57 +309,14 @@ function formatDate(dateStr, locale = 'ru-RU') {
     }
 }
 
-// --- ОБРАБОТЧИК ГЛОБАЛЬНЫХ ОШИБОК ---
-window.addEventListener('error', (event) => {
-    console.error('❌ Глобальная ошибка:', event.error || event.message);
-    if (event.error && event.error.message) {
-        showNotification(`Ошибка: ${event.error.message}`, 'error');
-    }
-});
+// Делаем функции доступными глобально
+window.supabaseRequest = supabaseRequest;
+window.setStatus = setStatus;
+window.showNotification = showNotification;
+window.loadTournamentsForSelect = loadTournamentsForSelect;
+window.clearCache = clearCache;
+window.invalidateCacheForEndpoint = invalidateCacheForEndpoint;
+window.escapeHtml = escapeHtml;
+window.formatDate = formatDate;
 
-// --- ОБРАБОТЧИК НЕПЕРЕХВАЧЕННЫХ ПРОМИСОВ ---
-window.addEventListener('unhandledrejection', (event) => {
-    console.error('❌ Неперехваченная ошибка Promise:', event.reason);
-    if (event.reason && event.reason.message) {
-        showNotification(`Ошибка: ${event.reason.message}`, 'error');
-    }
-});
-
-// --- СЛУШАТЕЛЬ ОНЛАЙН/ОФФЛАЙН ---
-window.addEventListener('online', () => {
-    showNotification('📡 Интернет соединение восстановлено', 'success');
-    refreshAll();
-});
-
-window.addEventListener('offline', () => {
-    showNotification('📡 Интернет соединение потеряно', 'error', 0);
-});
-
-// --- ПЕРИОДИЧЕСКОЕ ОБНОВЛЕНИЕ ---
-let autoRefreshInterval = null;
-
-function startAutoRefresh(interval = 300000) { // 5 минут
-    if (autoRefreshInterval) {
-        clearInterval(autoRefreshInterval);
-    }
-    autoRefreshInterval = setInterval(() => {
-        console.log('🔄 Автоматическое обновление данных');
-        refreshAll();
-    }, interval);
-}
-
-function stopAutoRefresh() {
-    if (autoRefreshInterval) {
-        clearInterval(autoRefreshInterval);
-        autoRefreshInterval = null;
-    }
-}
-
-// --- ИНИЦИАЛИЗАЦИЯ ---
-document.addEventListener('DOMContentLoaded', () => {
-    // Запускаем автообновление
-    startAutoRefresh();
-    
-    console.log('🚀 Вспомогательные функции инициализированы');
-});
-
+console.log('✅ utils.js загружен');
